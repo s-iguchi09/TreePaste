@@ -76,6 +76,36 @@ public partial class MainWindow : Window
     /// </summary>
     private void InitializeNotifyIcon()
     {
+        InitializeTrayContextMenu();
+
+        var iconUri = new Uri("pack://application:,,,/Assets/icon.ico");
+        var iconStream = System.Windows.Application.GetResourceStream(iconUri)!.Stream;
+        _notifyIcon = new NotifyIcon
+        {
+            Icon = new System.Drawing.Icon(iconStream),
+            Text = "Tree Paste",
+            Visible = true,
+        };
+        _notifyIcon.DoubleClick += (_, _) => ShowAndLoadClipboard();
+        _notifyIcon.MouseClick += (_, e) =>
+        {
+            if (e.Button == System.Windows.Forms.MouseButtons.Right)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    _trayContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+                    _trayContextMenu.IsOpen = true;
+                });
+            }
+        };
+    }
+
+    /// <summary>
+    /// タスクトレイのコンテキストメニューを初期化する。
+    /// Initializes the context menu for the system tray icon.
+    /// </summary>
+    private void InitializeTrayContextMenu()
+    {
         var showItem = new System.Windows.Controls.MenuItem
         {
             Header = "Show (Ctrl+Alt+V)"
@@ -108,27 +138,6 @@ public partial class MainWindow : Window
         _trayContextMenu = new System.Windows.Controls.ContextMenu
         {
             Items = { showItem, githubItem, separator, exitItem }
-        };
-
-        var iconUri = new Uri("pack://application:,,,/Assets/icon.ico");
-        var iconStream = System.Windows.Application.GetResourceStream(iconUri)!.Stream;
-        _notifyIcon = new NotifyIcon
-        {
-            Icon = new System.Drawing.Icon(iconStream),
-            Text = "Tree Paster",
-            Visible = true,
-        };
-        _notifyIcon.DoubleClick += (_, _) => ShowAndLoadClipboard();
-        _notifyIcon.MouseClick += (_, e) =>
-        {
-            if (e.Button == System.Windows.Forms.MouseButtons.Right)
-            {
-                Dispatcher.Invoke(() =>
-                {
-                    _trayContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
-                    _trayContextMenu.IsOpen = true;
-                });
-            }
         };
     }
 
@@ -169,8 +178,8 @@ public partial class MainWindow : Window
     // ━━━ クリップボード読み込み・表示 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /// <summary>
-    /// クリップボードを読み込んでウィンドウを前面に表示する。
-    /// Loads the clipboard and brings the window to the foreground.
+    /// ウィンドウを非表示にする。
+    /// Hides the window.
     /// </summary>
     private void HideWindow()
     {
@@ -192,7 +201,7 @@ public partial class MainWindow : Window
     // ━━━ キーボード ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /// <summary>
-    /// キーダウンイベントを処理する。Escape キーでウィンドウを隐襲する。
+    /// キーダウンイベントを処理する。Escape キーでウィンドウを隠す。
     /// Handles key down events. Hides the window when the Escape key is pressed.
     /// </summary>
     private void Window_KeyDown(object sender, KeyEventArgs e)
