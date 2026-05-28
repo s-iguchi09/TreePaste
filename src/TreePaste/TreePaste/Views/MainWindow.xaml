@@ -1,0 +1,165 @@
+<Window
+    x:Class="TreePaste.Views.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:converters="clr-namespace:TreePaste.Converters"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="clr-namespace:TreePaste.ViewModels"
+    Title="TreePaste"
+    Width="520"
+    Height="440"
+    KeyDown="Window_KeyDown"
+    ShowInTaskbar="False"
+    Topmost="True"
+    WindowStartupLocation="CenterScreen"
+    mc:Ignorable="d">
+    <Window.Resources>
+        <converters:BoolToFontWeightConverter x:Key="BoolToFontWeightConverter" />
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+
+        <!--  パスフォルダノード用スタイル（アクセントカラー + 角丸）  -->
+        <Style x:Key="PathFolderButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,2" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border
+                            x:Name="Bd"
+                            Padding="{TemplateBinding Padding}"
+                            Background="{TemplateBinding Background}"
+                            BorderThickness="0"
+                            CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource {x:Static SystemColors.AccentColorLight2BrushKey}}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource {x:Static SystemColors.AccentColorLight1BrushKey}}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!--  タスクトレイ右クリックメニュー Fluent スタイル  -->
+        <!--  TreeViewItem の自動展開スタイル  -->
+        <Style BasedOn="{StaticResource {x:Type TreeViewItem}}" TargetType="TreeViewItem">
+            <Setter Property="IsExpanded" Value="True" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsClipboardItem}" Value="True">
+                    <Setter Property="IsExpanded" Value="False" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+    <Window.DataContext>
+        <vm:MainViewModel />
+    </Window.DataContext>
+
+    <Border Margin="16" CornerRadius="8">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!--  コピー先パス  -->
+            <StackPanel Grid.Row="0" Margin="0,0,0,12">
+                <TextBlock
+                    FontSize="11"
+                    Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                    Text="Copy to:" />
+                <Border
+                    Margin="0,4,0,0"
+                    Padding="10,6"
+                    BorderBrush="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}"
+                    BorderThickness="0,0,0,2"
+                    CornerRadius="4,4,0,0">
+                    <Border.Background>
+                        <SolidColorBrush Opacity="0.06" Color="{DynamicResource {x:Static SystemColors.AccentColorKey}}" />
+                    </Border.Background>
+                    <TextBlock
+                        FontSize="13"
+                        Text="{Binding DestinationPathText}"
+                        TextTrimming="CharacterEllipsis"
+                        TextWrapping="NoWrap"
+                        ToolTip="{Binding DestinationPathText}" />
+                </Border>
+            </StackPanel>
+
+            <!--  ラベル  -->
+            <TextBlock
+                Grid.Row="1"
+                Margin="0,0,0,6"
+                FontSize="11"
+                Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                Text="Files in clipboard:" />
+
+            <!--  ファイルツリー  -->
+            <Border
+                Grid.Row="2"
+                Margin="0,0,0,12"
+                BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+                BorderThickness="1"
+                CornerRadius="6">
+                <ScrollViewer
+                    x:Name="TreeScrollViewer"
+                    Padding="4"
+                    VerticalScrollBarVisibility="Auto">
+                    <TreeView
+                        BorderThickness="0"
+                        ItemsSource="{Binding RootItems}"
+                        PreviewMouseWheel="TreeView_PreviewMouseWheel"
+                        ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                        ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                        VirtualizingPanel.IsVirtualizing="False">
+                        <TreeView.ItemTemplate>
+                            <HierarchicalDataTemplate ItemsSource="{Binding Children}">
+                                <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+                                    <!--  パスフォルダ（クリックでコピー先を指定）  -->
+                                    <Button
+                                        Command="{Binding DataContext.PathFolderClickCommand, RelativeSource={RelativeSource AncestorType=TreeView}}"
+                                        CommandParameter="{Binding}"
+                                        Content="{Binding Name}"
+                                        Style="{StaticResource PathFolderButtonStyle}"
+                                        Visibility="{Binding IsPathFolder, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                    <!--  クリップボードアイテム（ファイル/ディレクトリ）  -->
+                                    <TextBlock
+                                        Margin="2,1"
+                                        FontWeight="{Binding IsDirectory, Converter={StaticResource BoolToFontWeightConverter}}"
+                                        Text="{Binding Name}"
+                                        Visibility="{Binding IsClipboardItem, Converter={StaticResource BoolToVisibilityConverter}}" />
+                                </StackPanel>
+                            </HierarchicalDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </ScrollViewer>
+            </Border>
+
+            <!--  ボタン  -->
+            <StackPanel
+                Grid.Row="3"
+                HorizontalAlignment="Right"
+                Orientation="Horizontal">
+                <Button
+                    Width="100"
+                    Height="32"
+                    Command="{Binding CancelCommand}"
+                    Content="Cancel"
+                    IsCancel="True" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>
