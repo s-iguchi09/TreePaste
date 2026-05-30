@@ -120,7 +120,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         var invalidChars = Path.GetInvalidFileNameChars();
         string SanitizeName(string name) =>
-            string.Concat(name.Select(c => invalidChars.Contains(c) ? '_' : c));
+            string.Concat(name.Select(c => invalidChars.Contains(c) ? "" : c.ToString()));
 
         FileTreeItem? root = null;
         FileTreeItem? current = null;
