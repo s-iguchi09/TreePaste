@@ -148,18 +148,25 @@
                 </ScrollViewer>
             </Border>
 
-            <!--  ボタン  -->
-            <StackPanel
-                Grid.Row="3"
-                HorizontalAlignment="Right"
-                Orientation="Horizontal">
-                <Button
-                    Width="100"
-                    Height="32"
-                    Command="{Binding CancelCommand}"
-                    Content="Cancel"
-                    IsCancel="True" />
-            </StackPanel>
+            <!--  ボタン / プログレスバー  -->
+            <Grid Grid.Row="3">
+                <ProgressBar
+                    Height="4"
+                    VerticalAlignment="Top"
+                    IsIndeterminate="True"
+                    Visibility="{Binding IsProcessing, Converter={StaticResource BoolToVisibilityConverter}}" />
+                <StackPanel
+                    Margin="0,8,0,0"
+                    HorizontalAlignment="Right"
+                    Orientation="Horizontal">
+                    <Button
+                        Width="100"
+                        Height="32"
+                        Command="{Binding CancelCommand}"
+                        Content="Cancel"
+                        IsCancel="True" />
+                </StackPanel>
+            </Grid>
         </Grid>
     </Border>
 </Window>

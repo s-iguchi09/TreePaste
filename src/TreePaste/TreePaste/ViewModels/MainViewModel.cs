@@ -18,6 +18,17 @@ public class MainViewModel : INotifyPropertyChanged
 {
     private string _destinationPathText = "Loading...";
     private string? _destinationPath;
+    private bool _isProcessing;
+
+    /// <summary>
+    /// コピー処理中かどうかを示す。プログレスバーの表示制御に使用する。
+    /// Indicates whether a copy operation is in progress. Used to control the progress bar visibility.
+    /// </summary>
+    public bool IsProcessing
+    {
+        get => _isProcessing;
+        set { _isProcessing = value; OnPropertyChanged(); CommandManager.InvalidateRequerySuggested(); }
+    }
 
     /// <summary>
     /// ツリービューのルートアイテムコレクション。
@@ -53,7 +64,7 @@ public class MainViewModel : INotifyPropertyChanged
     /// </summary>
     public MainViewModel()
     {
-        CancelCommand = new RelayCommand(OnCancel);
+        CancelCommand = new RelayCommand(OnCancel, () => !IsProcessing);
         PathFolderClickCommand = new RelayCommand<FileTreeItem>(OnPathFolderClick);
     }
 
@@ -228,50 +239,52 @@ public class MainViewModel : INotifyPropertyChanged
     /// Called when a path folder node is clicked; copies the corresponding file to the destination.
     /// </summary>
     /// <param name="folderItem">クリックされたフォルダーアイテム。 / The clicked folder item.</param>
-    private void OnPathFolderClick(FileTreeItem? folderItem)
+    private async void OnPathFolderClick(FileTreeItem? folderItem)
     {
         if (folderItem == null || string.IsNullOrEmpty(_destinationPath))
             return;
 
+        var leaf = FindClipboardLeaf(folderItem);
+        if (leaf == null)
+            return;
+
+        // BuildPathChain は folderItem.FullPath を parts[0..i] の形で構築しているため、
+        // セグメント数（RemoveEmptyEntries）= folderItem が leaf.FullPath 内の何番目のセグメントか を表す。
+        // この深さを使って leaf.FullPath からフォルダ名を先頭に含む相対パスを再構築する。
+        // ※ Path.GetRelativePath / Path.GetFullPath はUNCパスを不完全に保存したノードのFullPathでは
+        //   正しく機能しないため、パス文字列への依存を避けてセグメント配列で処理する。
+        string[] folderParts = folderItem.FullPath.Split(Path.DirectorySeparatorChar,
+            StringSplitOptions.RemoveEmptyEntries);
+        string[] leafParts = leaf.FullPath.Split(Path.DirectorySeparatorChar,
+            StringSplitOptions.RemoveEmptyEntries);
+
+        // folderItem が何番目のセグメントか（0始まり）
+        int startIndex = folderParts.Length - 1;
+
+        string relativePath;
+        if (startIndex >= 0 && startIndex < leafParts.Length)
+        {
+            // leaf.FullPath の startIndex 以降のセグメントを結合して相対パスを作成する
+            // 先頭セグメントの ":" を除去
+            string[] relParts = leafParts[startIndex..];
+            relParts[0] = relParts[0].Replace(":", "");
+            relativePath = Path.Combine(relParts);
+        }
+        else
+        {
+            // 範囲外の場合はファイル名のみにフォールバック
+            relativePath = Path.GetFileName(leaf.FullPath) ?? leaf.Name;
+        }
+
+        string destPath = Path.Combine(_destinationPath, relativePath);
+
         try
         {
+            IsProcessing = true;
             Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
 
-            var leaf = FindClipboardLeaf(folderItem);
-            if (leaf == null)
-                return;
-
-            // BuildPathChain は folderItem.FullPath を parts[0..i] の形で構築しているため、
-            // セグメント数（RemoveEmptyEntries）= folderItem が leaf.FullPath 内の何番目のセグメントか を表す。
-            // この深さを使って leaf.FullPath からフォルダ名を先頭に含む相対パスを再構築する。
-            // ※ Path.GetRelativePath / Path.GetFullPath はUNCパスを不完全に保存したノードのFullPathでは
-            //   正しく機能しないため、パス文字列への依存を避けてセグメント配列で処理する。
-            string[] folderParts = folderItem.FullPath.Split(Path.DirectorySeparatorChar,
-                StringSplitOptions.RemoveEmptyEntries);
-            string[] leafParts = leaf.FullPath.Split(Path.DirectorySeparatorChar,
-                StringSplitOptions.RemoveEmptyEntries);
-
-            // folderItem が何番目のセグメントか（0始まり）
-            int startIndex = folderParts.Length - 1;
-
-            string relativePath;
-            if (startIndex >= 0 && startIndex < leafParts.Length)
-            {
-                // leaf.FullPath の startIndex 以降のセグメントを結合して相対パスを作成する
-                // 先頭セグメントの ":" を除去
-                string[] relParts = leafParts[startIndex..];
-                relParts[0] = relParts[0].Replace(":", "");
-                relativePath = Path.Combine(relParts);
-            }
-            else
-            {
-                // 範囲外の場合はファイル名のみにフォールバック
-                relativePath = Path.GetFileName(leaf.FullPath) ?? leaf.Name;
-            }
-
-            string destPath = Path.Combine(_destinationPath, relativePath);
-
-            ClipboardHelper.CopyFileOrDirectory(leaf.FullPath, destPath);
+            string srcPath = leaf.FullPath;
+            await Task.Run(() => ClipboardHelper.CopyFileOrDirectory(srcPath, destPath));
 
             MessageBox.Show($"Copied successfully.\n{destPath}",
                 "Success", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -285,6 +298,7 @@ public class MainViewModel : INotifyPropertyChanged
         }
         finally
         {
+            IsProcessing = false;
             Mouse.OverrideCursor = null;
         }
     }
