@@ -30,6 +30,13 @@ internal static class Win32Api
     public static extern IntPtr GetForegroundWindow();
 
     /// <summary>
+    /// 指定ウィンドウをフォアグラウンドに設定する。
+    /// Sets the specified window as the foreground window.
+    /// </summary>
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    /// <summary>
     /// 指定ウィンドウを作成したスレッドとプロセス ID を取得する。
     /// Retrieves the thread and process ID of the specified window.
     /// </summary>

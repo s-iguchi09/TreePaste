@@ -93,6 +93,8 @@ public partial class MainWindow : Window
             {
                 Dispatcher.Invoke(() =>
                 {
+                    var helper = new WindowInteropHelper(this);
+                    Win32Api.SetForegroundWindow(helper.Handle);
                     _trayContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
                     _trayContextMenu.IsOpen = true;
                 });
@@ -137,7 +139,8 @@ public partial class MainWindow : Window
 
         _trayContextMenu = new System.Windows.Controls.ContextMenu
         {
-            Items = { showItem, githubItem, separator, exitItem }
+            Items = { showItem, githubItem, separator, exitItem },
+            StaysOpen = false
         };
     }
 
@@ -158,6 +161,8 @@ public partial class MainWindow : Window
         {
             MessageBox.Show("Failed to register hotkey (Ctrl+Alt+V).",
                 "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            _notifyIcon?.Dispose();
+            System.Windows.Application.Current.Shutdown();
         }
     }
 

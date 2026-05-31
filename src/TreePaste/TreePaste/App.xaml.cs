@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
 using TreePaste.Services;
@@ -13,6 +14,7 @@ namespace TreePaste
     public partial class App : Application
     {
         private MainWindow? _mainWindow;
+        private Mutex? _mutex;
 
         /// <summary>
         /// アプリケーション起動時にメインウィンドウの生成とウォームアップ処理を行う。
@@ -21,6 +23,14 @@ namespace TreePaste
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
+
+            _mutex = new Mutex(true, "TreePaste_SingleInstance", out bool createdNew);
+            if (!createdNew)
+            {
+                _mutex.Dispose();
+                Shutdown();
+                return;
+            }
 
             _mainWindow = new MainWindow();
 
@@ -32,6 +42,17 @@ namespace TreePaste
             // COM (Shell.Application) と Windows Forms アセンブリを
             // バックグラウンドで事前初期化し、初回ホットキー時の遅延を削減する
             Task.Run(ExplorerHelper.PreWarm);
+        }
+
+        /// <summary>
+        /// アプリケーション終了時に Mutex を解放する。
+        /// Releases the mutex on application exit.
+        /// </summary>
+        protected override void OnExit(ExitEventArgs e)
+        {
+            _mutex?.ReleaseMutex();
+            _mutex?.Dispose();
+            base.OnExit(e);
         }
     }
 }
