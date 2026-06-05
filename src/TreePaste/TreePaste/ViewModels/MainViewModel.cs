@@ -120,6 +120,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         if (clipboardPaths.Count == 0)
         {
+            UpdateCanPaste();
             MessageBox.Show("No files in clipboard.",
                 "Info", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
