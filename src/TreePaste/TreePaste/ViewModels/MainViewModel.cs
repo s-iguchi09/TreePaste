@@ -20,6 +20,7 @@ public class MainViewModel : INotifyPropertyChanged
     private string? _destinationPath;
     private bool _isProcessing;
     private bool _canPaste = true;
+    private readonly List<FileTreeItem> _subscribedItems = new();
 
     /// <summary>
     /// コピー処理中かどうかを示す。プログレスバーの表示制御に使用する。
@@ -112,6 +113,7 @@ public class MainViewModel : INotifyPropertyChanged
     /// </summary>
     private void LoadClipboardFiles()
     {
+        UnsubscribeFromCheckedChanges();
         RootItems.Clear();
 
         var clipboardPaths = ClipboardHelper.GetClipboardFilePaths();
@@ -375,8 +377,20 @@ public class MainViewModel : INotifyPropertyChanged
     private void SubscribeToCheckedChanges(FileTreeItem item)
     {
         item.PropertyChanged += OnItemPropertyChanged;
+        _subscribedItems.Add(item);
         foreach (var child in item.Children)
             SubscribeToCheckedChanges(child);
+    }
+
+    /// <summary>
+    /// 購読中のすべてのアイテムから IsChecked 変更の購読を解除する。
+    /// Unsubscribes from IsChecked changes for all currently subscribed items.
+    /// </summary>
+    private void UnsubscribeFromCheckedChanges()
+    {
+        foreach (var item in _subscribedItems)
+            item.PropertyChanged -= OnItemPropertyChanged;
+        _subscribedItems.Clear();
     }
 
     /// <summary>
