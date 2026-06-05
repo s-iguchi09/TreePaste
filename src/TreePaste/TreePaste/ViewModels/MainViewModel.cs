@@ -426,11 +426,13 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// キャンセル操作を実行し、ウィンドウを閉じるよう通知する。
-    /// Executes the cancel operation and notifies the view to close the window.
+    /// キャンセル操作を実行し、ツリーをクリアして購読を解除した後、ウィンドウを閉じるよう通知する。
+    /// Executes the cancel operation, clears the tree, unsubscribes from events, and notifies the view to close the window.
     /// </summary>
     private void OnCancel()
     {
+        UnsubscribeFromCheckedChanges();
+        RootItems.Clear();
         CloseRequested?.Invoke(this, EventArgs.Empty);
     }
 
