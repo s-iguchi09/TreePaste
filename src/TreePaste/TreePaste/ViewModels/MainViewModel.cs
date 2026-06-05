@@ -83,7 +83,7 @@ public class MainViewModel : INotifyPropertyChanged
     public MainViewModel()
     {
         CancelCommand = new RelayCommand(OnCancel, () => !IsProcessing);
-        PathFolderClickCommand = new RelayCommand<FileTreeItem>(OnPathFolderClick, _ => CanPaste && !IsProcessing);
+        PathFolderClickCommand = new RelayCommand<FileTreeItem>(OnPathFolderClick, folder => !IsProcessing && folder != null && HasAnyCheckedClipboardItem(folder));
     }
 
     /// <summary>
