@@ -15,6 +15,7 @@ public class FileTreeItem : INotifyPropertyChanged
     private bool _isDirectory;
     private bool _isPathFolder;
     private bool _isClipboardItem;
+    private bool? _isChecked = true;
 
     /// <summary>
     /// 表示名。
@@ -64,6 +65,59 @@ public class FileTreeItem : INotifyPropertyChanged
     {
         get => _isClipboardItem;
         set { _isClipboardItem = value; OnPropertyChanged(); }
+    }
+
+    /// <summary>
+    /// チェックされているかどうかを示す値（null は不定）。初期値は true。
+    /// Indicates whether this item is checked (null = indeterminate). Default is true.
+    /// </summary>
+    public bool? IsChecked
+    {
+        get => _isChecked;
+        set => SetIsChecked(value, updateChildren: true, updateParent: true);
+    }
+
+    /// <summary>
+    /// 親ノードへの参照。親への状態伝播に使用する。
+    /// Reference to the parent node. Used to propagate state to the parent.
+    /// </summary>
+    public FileTreeItem? Parent { get; set; }
+
+    private void SetIsChecked(bool? value, bool updateChildren, bool updateParent)
+    {
+        if (_isChecked == value) return;
+        _isChecked = value;
+        OnPropertyChanged(nameof(IsChecked));
+
+        if (updateChildren && value.HasValue)
+        {
+            foreach (var child in Children)
+                child.SetIsChecked(value, updateChildren: true, updateParent: false);
+        }
+
+        if (updateParent)
+            Parent?.UpdateCheckedStateFromChildren();
+    }
+
+    /// <summary>
+    /// 子ノードのチェック状態をもとに自身の状態を再計算する。
+    /// Recalculates own check state based on children's states.
+    /// </summary>
+    internal void UpdateCheckedStateFromChildren()
+    {
+        if (Children.Count == 0) return;
+
+        bool? state = Children[0].IsChecked;
+        for (int i = 1; i < Children.Count; i++)
+        {
+            if (state != Children[i].IsChecked)
+            {
+                state = null;
+                break;
+            }
+        }
+
+        SetIsChecked(state, updateChildren: false, updateParent: true);
     }
 
     /// <summary>

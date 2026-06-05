@@ -19,6 +19,8 @@ public class MainViewModel : INotifyPropertyChanged
     private string _destinationPathText = "Loading...";
     private string? _destinationPath;
     private bool _isProcessing;
+    private bool _canPaste = true;
+    private readonly List<FileTreeItem> _subscribedItems = new();
 
     /// <summary>
     /// コピー処理中かどうかを示す。プログレスバーの表示制御に使用する。
@@ -28,6 +30,22 @@ public class MainViewModel : INotifyPropertyChanged
     {
         get => _isProcessing;
         set { _isProcessing = value; OnPropertyChanged(); CommandManager.InvalidateRequerySuggested(); }
+    }
+
+    /// <summary>
+    /// 貼り付け可能かどうかを示す。チェックされているアイテムが1つ以上ある場合に true。
+    /// Indicates whether pasting is possible. True when at least one item is checked.
+    /// </summary>
+    public bool CanPaste
+    {
+        get => _canPaste;
+        private set
+        {
+            if (_canPaste == value) return;
+            _canPaste = value;
+            OnPropertyChanged();
+            CommandManager.InvalidateRequerySuggested();
+        }
     }
 
     /// <summary>
@@ -65,7 +83,7 @@ public class MainViewModel : INotifyPropertyChanged
     public MainViewModel()
     {
         CancelCommand = new RelayCommand(OnCancel, () => !IsProcessing);
-        PathFolderClickCommand = new RelayCommand<FileTreeItem>(OnPathFolderClick);
+        PathFolderClickCommand = new RelayCommand<FileTreeItem>(OnPathFolderClick, folder => !IsProcessing && folder != null && HasAnyCheckedClipboardItem(folder));
     }
 
     /// <summary>
@@ -95,12 +113,14 @@ public class MainViewModel : INotifyPropertyChanged
     /// </summary>
     private void LoadClipboardFiles()
     {
+        UnsubscribeFromCheckedChanges();
         RootItems.Clear();
 
         var clipboardPaths = ClipboardHelper.GetClipboardFilePaths();
 
         if (clipboardPaths.Count == 0)
         {
+            UpdateCanPaste();
             MessageBox.Show("No files in clipboard.",
                 "Info", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
@@ -111,6 +131,11 @@ public class MainViewModel : INotifyPropertyChanged
             var chain = BuildPathChain(filePath);
             RootItems.Add(chain);
         }
+
+        foreach (var item in RootItems)
+            SubscribeToCheckedChanges(item);
+
+        UpdateCanPaste();
     }
 
     /// <summary>
@@ -283,12 +308,12 @@ public class MainViewModel : INotifyPropertyChanged
             IsProcessing = true;
             Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
 
-            string srcPath = leaf.FullPath;
-            await Task.Run(() => ClipboardHelper.CopyFileOrDirectory(srcPath, destPath));
+            await Task.Run(() => CopyCheckedItems(leaf, destPath));
 
-            MessageBox.Show($"Copied successfully.\n{destPath}",
+            MessageBox.Show("Copied successfully.",
                 "Success", MessageBoxButton.OK, MessageBoxImage.Information);
 
+            OnHide();
             CloseRequested?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
@@ -323,11 +348,102 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// キャンセル操作を実行し、ウィンドウを閉じるよう通知する。
-    /// Executes the cancel operation and notifies the view to close the window.
+    /// チェックされたアイテムのみを再帰的にコピーする。
+    /// Recursively copies only checked items.
+    /// </summary>
+    /// <param name="item">コピー元の <see cref="FileTreeItem"/>。 / Source <see cref="FileTreeItem"/>.</param>
+    /// <param name="destPath">コピー先のパス。 / Destination path.</param>
+    private static void CopyCheckedItems(FileTreeItem item, string destPath)
+    {
+        if (!HasAnyCheckedClipboardItem(item)) return;
+
+        if (!item.IsDirectory)
+        {
+            string? parentDir = Path.GetDirectoryName(destPath);
+            if (!string.IsNullOrEmpty(parentDir))
+                Directory.CreateDirectory(parentDir);
+            File.Copy(item.FullPath, destPath, overwrite: true);
+            return;
+        }
+
+        Directory.CreateDirectory(destPath);
+        foreach (var child in item.Children)
+            CopyCheckedItems(child, Path.Combine(destPath, child.Name));
+    }
+
+    /// <summary>
+    /// ツリーアイテムとその子孫の IsChecked 変更を購読する。
+    /// Subscribes to IsChecked changes for a tree item and all its descendants.
+    /// </summary>
+    /// <param name="item">購読対象のアイテム。 / Item to subscribe.</param>
+    private void SubscribeToCheckedChanges(FileTreeItem item, FileTreeItem? parent = null)
+    {
+        item.Parent = parent;
+        item.PropertyChanged += OnItemPropertyChanged;
+        _subscribedItems.Add(item);
+        foreach (var child in item.Children)
+            SubscribeToCheckedChanges(child, item);
+    }
+
+    /// <summary>
+    /// 購読中のすべてのアイテムから IsChecked 変更の購読を解除する。
+    /// Unsubscribes from IsChecked changes for all currently subscribed items.
+    /// </summary>
+    private void UnsubscribeFromCheckedChanges()
+    {
+        foreach (var item in _subscribedItems)
+            item.PropertyChanged -= OnItemPropertyChanged;
+        _subscribedItems.Clear();
+    }
+
+    /// <summary>
+    /// アイテムのプロパティ変更を処理し、IsChecked が変わった場合に CanPaste を更新する。
+    /// Handles item property changes and updates CanPaste when IsChecked changes.
+    /// </summary>
+    private void OnItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(FileTreeItem.IsChecked))
+            UpdateCanPaste();
+    }
+
+    /// <summary>
+    /// CanPaste を再計算する。チェックされたクリップボードアイテムが1つ以上あれば true。
+    /// Recalculates CanPaste. True if at least one checked clipboard item exists.
+    /// </summary>
+    private void UpdateCanPaste()
+    {
+        CanPaste = RootItems.Any(HasAnyCheckedClipboardItem);
+    }
+
+    /// <summary>
+    /// ノードまたはその子孫にチェックされたクリップボードアイテムがあるかどうかを返す。
+    /// Returns whether the node or any descendant has a checked clipboard item.
+    /// </summary>
+    /// <param name="item">探索するノード。 / Node to search.</param>
+    private static bool HasAnyCheckedClipboardItem(FileTreeItem item)
+    {
+        if (item.IsClipboardItem && item.IsChecked == true) return true;
+        return item.Children.Any(HasAnyCheckedClipboardItem);
+    }
+
+    /// <summary>
+    /// 画面が非表示になる際にツリーをクリアして購読を解除する。
+    /// Clears the tree and unsubscribes from events when the window is about to be hidden.
+    /// </summary>
+    public void OnHide()
+    {
+        UnsubscribeFromCheckedChanges();
+        RootItems.Clear();
+        CanPaste = false;
+    }
+
+    /// <summary>
+    /// キャンセル操作を実行し、ツリーをクリアして購読を解除した後、ウィンドウを閉じるよう通知する。
+    /// Executes the cancel operation, clears the tree, unsubscribes from events, and notifies the view to close the window.
     /// </summary>
     private void OnCancel()
     {
+        OnHide();
         CloseRequested?.Invoke(this, EventArgs.Empty);
     }
 
