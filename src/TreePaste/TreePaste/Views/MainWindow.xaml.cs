@@ -183,11 +183,12 @@ public partial class MainWindow : Window
     // ━━━ クリップボード読み込み・表示 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /// <summary>
-    /// ウィンドウを非表示にする。
-    /// Hides the window.
+    /// ウィンドウを非表示にする。ツリーをクリアして購読を解除する。
+    /// Hides the window. Clears the tree and unsubscribes from events.
     /// </summary>
     private void HideWindow()
     {
+        ViewModel.OnHide();
         ShowInTaskbar = false;
         Hide();
     }

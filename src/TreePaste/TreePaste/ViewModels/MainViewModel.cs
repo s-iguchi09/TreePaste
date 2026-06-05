@@ -312,8 +312,7 @@ public class MainViewModel : INotifyPropertyChanged
             MessageBox.Show($"Copied successfully.\n{destPath}",
                 "Success", MessageBoxButton.OK, MessageBoxImage.Information);
 
-            UnsubscribeFromCheckedChanges();
-            RootItems.Clear();
+            OnHide();
             CloseRequested?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
@@ -426,13 +425,22 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// 画面が非表示になる際にツリーをクリアして購読を解除する。
+    /// Clears the tree and unsubscribes from events when the window is about to be hidden.
+    /// </summary>
+    public void OnHide()
+    {
+        UnsubscribeFromCheckedChanges();
+        RootItems.Clear();
+    }
+
+    /// <summary>
     /// キャンセル操作を実行し、ツリーをクリアして購読を解除した後、ウィンドウを閉じるよう通知する。
     /// Executes the cancel operation, clears the tree, unsubscribes from events, and notifies the view to close the window.
     /// </summary>
     private void OnCancel()
     {
-        UnsubscribeFromCheckedChanges();
-        RootItems.Clear();
+        OnHide();
         CloseRequested?.Invoke(this, EventArgs.Empty);
     }
 
