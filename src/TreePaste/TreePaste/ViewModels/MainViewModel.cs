@@ -433,6 +433,7 @@ public class MainViewModel : INotifyPropertyChanged
     {
         UnsubscribeFromCheckedChanges();
         RootItems.Clear();
+        CanPaste = false;
     }
 
     /// <summary>
