@@ -15,6 +15,7 @@ public class FileTreeItem : INotifyPropertyChanged
     private bool _isDirectory;
     private bool _isPathFolder;
     private bool _isClipboardItem;
+    private bool _isChecked = true;
 
     /// <summary>
     /// 表示名。
@@ -64,6 +65,23 @@ public class FileTreeItem : INotifyPropertyChanged
     {
         get => _isClipboardItem;
         set { _isClipboardItem = value; OnPropertyChanged(); }
+    }
+
+    /// <summary>
+    /// チェックされているかどうかを示す値。初期値は true。
+    /// Indicates whether this item is checked. Default is true.
+    /// </summary>
+    public bool IsChecked
+    {
+        get => _isChecked;
+        set
+        {
+            if (_isChecked == value) return;
+            _isChecked = value;
+            OnPropertyChanged();
+            foreach (var child in Children)
+                child.IsChecked = value;
+        }
     }
 
     /// <summary>
