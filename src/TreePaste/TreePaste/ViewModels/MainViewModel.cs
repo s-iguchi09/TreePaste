@@ -312,6 +312,8 @@ public class MainViewModel : INotifyPropertyChanged
             MessageBox.Show($"Copied successfully.\n{destPath}",
                 "Success", MessageBoxButton.OK, MessageBoxImage.Information);
 
+            UnsubscribeFromCheckedChanges();
+            RootItems.Clear();
             CloseRequested?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
