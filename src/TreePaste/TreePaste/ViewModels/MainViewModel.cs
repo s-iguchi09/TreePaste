@@ -309,7 +309,7 @@ public class MainViewModel : INotifyPropertyChanged
 
             await Task.Run(() => CopyCheckedItems(leaf, destPath));
 
-            MessageBox.Show($"Copied successfully.\n{destPath}",
+            MessageBox.Show("Copied successfully.",
                 "Success", MessageBoxButton.OK, MessageBoxImage.Information);
 
             OnHide();
