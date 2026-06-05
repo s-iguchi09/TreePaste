@@ -137,12 +137,14 @@
                                         Visibility="{Binding IsPathFolder, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     <!--  クリップボードアイテム（チェックボックス）  -->
                                     <CheckBox
+                                        Margin="-5"
                                         VerticalAlignment="Center"
                                         IsChecked="{Binding IsChecked, Mode=TwoWay}"
                                         Visibility="{Binding IsClipboardItem, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     <!--  クリップボードアイテム（ファイル/ディレクトリ）  -->
                                     <TextBlock
                                         Margin="2,1"
+                                        VerticalAlignment="Center"
                                         FontWeight="{Binding IsDirectory, Converter={StaticResource BoolToFontWeightConverter}}"
                                         Text="{Binding Name}"
                                         Visibility="{Binding IsClipboardItem, Converter={StaticResource BoolToVisibilityConverter}}" />
