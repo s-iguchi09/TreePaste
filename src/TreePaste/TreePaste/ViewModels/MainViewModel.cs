@@ -355,7 +355,7 @@ public class MainViewModel : INotifyPropertyChanged
     /// <param name="destPath">コピー先のパス。 / Destination path.</param>
     private static void CopyCheckedItems(FileTreeItem item, string destPath)
     {
-        if (!item.IsChecked) return;
+        if (!HasAnyCheckedClipboardItem(item)) return;
 
         if (!item.IsDirectory)
         {
