@@ -140,6 +140,7 @@
                                         Margin="-5"
                                         VerticalAlignment="Center"
                                         IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                                        IsThreeState="False"
                                         Visibility="{Binding IsClipboardItem, Converter={StaticResource BoolToVisibilityConverter}}" />
                                     <!--  クリップボードアイテム（ファイル/ディレクトリ）  -->
                                     <TextBlock

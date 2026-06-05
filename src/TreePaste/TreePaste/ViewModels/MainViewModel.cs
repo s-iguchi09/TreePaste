@@ -376,12 +376,13 @@ public class MainViewModel : INotifyPropertyChanged
     /// Subscribes to IsChecked changes for a tree item and all its descendants.
     /// </summary>
     /// <param name="item">購読対象のアイテム。 / Item to subscribe.</param>
-    private void SubscribeToCheckedChanges(FileTreeItem item)
+    private void SubscribeToCheckedChanges(FileTreeItem item, FileTreeItem? parent = null)
     {
+        item.Parent = parent;
         item.PropertyChanged += OnItemPropertyChanged;
         _subscribedItems.Add(item);
         foreach (var child in item.Children)
-            SubscribeToCheckedChanges(child);
+            SubscribeToCheckedChanges(child, item);
     }
 
     /// <summary>
@@ -421,7 +422,7 @@ public class MainViewModel : INotifyPropertyChanged
     /// <param name="item">探索するノード。 / Node to search.</param>
     private static bool HasAnyCheckedClipboardItem(FileTreeItem item)
     {
-        if (item.IsClipboardItem && item.IsChecked) return true;
+        if (item.IsClipboardItem && item.IsChecked == true) return true;
         return item.Children.Any(HasAnyCheckedClipboardItem);
     }
 
