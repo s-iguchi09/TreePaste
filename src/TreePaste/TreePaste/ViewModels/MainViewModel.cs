@@ -29,7 +29,12 @@ public class MainViewModel : INotifyPropertyChanged
     public bool IsProcessing
     {
         get => _isProcessing;
-        set { _isProcessing = value; OnPropertyChanged(); CommandManager.InvalidateRequerySuggested(); }
+        set
+        {
+            _isProcessing = value;
+            OnPropertyChanged();
+            CommandManager.InvalidateRequerySuggested();
+        }
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using TreePaste.Infrastructure;
@@ -76,20 +77,20 @@ public partial class MainWindow : Window
     /// </summary>
     private void InitializeNotifyIcon()
     {
-        InitializeTrayContextMenu();
+        _trayContextMenu = CreateTrayContextMenu();
 
         var iconUri = new Uri("pack://application:,,,/Assets/icon.ico");
         var iconStream = System.Windows.Application.GetResourceStream(iconUri)!.Stream;
         _notifyIcon = new NotifyIcon
         {
-            Icon = new System.Drawing.Icon(iconStream),
+            Icon = new Icon(iconStream),
             Text = "Tree Paste",
             Visible = true,
         };
         _notifyIcon.DoubleClick += (_, _) => ShowAndLoadClipboard();
         _notifyIcon.MouseClick += (_, e) =>
         {
-            if (e.Button == System.Windows.Forms.MouseButtons.Right)
+            if (e.Button == MouseButtons.Right)
             {
                 Dispatcher.Invoke(() =>
                 {
@@ -106,7 +107,7 @@ public partial class MainWindow : Window
     /// タスクトレイのコンテキストメニューを初期化する。
     /// Initializes the context menu for the system tray icon.
     /// </summary>
-    private void InitializeTrayContextMenu()
+    private System.Windows.Controls.ContextMenu CreateTrayContextMenu()
     {
         var showItem = new System.Windows.Controls.MenuItem
         {
@@ -125,7 +126,7 @@ public partial class MainWindow : Window
                 UseShellExecute = true
             });
 
-        var separator = new System.Windows.Controls.Separator();
+        var separator = new Separator();
 
         var exitItem = new System.Windows.Controls.MenuItem
         {
@@ -137,7 +138,7 @@ public partial class MainWindow : Window
             System.Windows.Application.Current.Shutdown();
         };
 
-        _trayContextMenu = new System.Windows.Controls.ContextMenu
+        return new System.Windows.Controls.ContextMenu
         {
             Items = { showItem, githubItem, separator, exitItem },
             StaysOpen = false
