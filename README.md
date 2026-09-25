@@ -44,10 +44,10 @@ dotnet build src/TreePaste/TreePaste.slnx
 ### Publish
 
 ```
-dotnet publish src/TreePaste/TreePaste/TreePaste.csproj -c Release -r win-x64
+dotnet publish src/TreePaste/TreePaste/TreePaste.csproj -c Release -p:PublishProfile=win-x64.pubxml
 ```
 
-Output is placed in `src/publish/win-x64/`.
+This uses the same publish profile as the release workflow and produces a self-contained single-file executable in `src/TreePaste/TreePaste/bin/Release/net10.0-windows/publish/win-x64/`.
 
 ### License
 
@@ -95,10 +95,10 @@ dotnet build src/TreePaste/TreePaste.slnx
 ### 公開（発行）
 
 ```
-dotnet publish src/TreePaste/TreePaste/TreePaste.csproj -c Release -r win-x64
+dotnet publish src/TreePaste/TreePaste/TreePaste.csproj -c Release -p:PublishProfile=win-x64.pubxml
 ```
 
-発行成果物は `src/publish/win-x64/` に出力されます。
+リリースのワークフローと同じ発行プロファイルを使い、自己完結型の単一ファイルの実行ファイルを `src/TreePaste/TreePaste/bin/Release/net10.0-windows/publish/win-x64/` に出力します。
 
 ### ライセンス
 
