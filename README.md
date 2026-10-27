@@ -2,6 +2,8 @@
 
 Language: [English](#english) | [日本語](#japanese)
 
+Website: [English](https://s-iguchi09.github.io/apps/treepaste.html) | [日本語](https://s-iguchi09.github.io/ja/apps/treepaste.html)
+
 ---
 
 <a id="english"></a>
@@ -48,6 +50,10 @@ dotnet publish src/TreePaste/TreePaste/TreePaste.csproj -c Release -p:PublishPro
 ```
 
 This uses the same publish profile as the release workflow and produces a self-contained single-file executable in `src/TreePaste/TreePaste/bin/Release/net10.0-windows/publish/win-x64/`.
+
+### Related Article
+
+- [Fixing a WPF Tray ContextMenu That Does Not Close on Focus Loss](https://s-iguchi09.github.io/articles/wpf-tray-contextmenu-close-on-focus-loss/) — an issue solved while building TreePaste
 
 ### License
 
@@ -99,6 +105,10 @@ dotnet publish src/TreePaste/TreePaste/TreePaste.csproj -c Release -p:PublishPro
 ```
 
 リリースのワークフローと同じ発行プロファイルを使い、自己完結型の単一ファイルの実行ファイルを `src/TreePaste/TreePaste/bin/Release/net10.0-windows/publish/win-x64/` に出力します。
+
+### 関連記事
+
+- [WPF タスクトレイの ContextMenu がフォーカス移動で閉じない問題の解消方法](https://s-iguchi09.github.io/ja/articles/wpf-tray-contextmenu-close-on-focus-loss/) — TreePaste の開発中に解決した問題
 
 ### ライセンス
 
