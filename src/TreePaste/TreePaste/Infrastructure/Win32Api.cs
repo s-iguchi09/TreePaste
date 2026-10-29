@@ -43,6 +43,13 @@ internal static class Win32Api
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
+    /// <summary>
+    /// 指定クラス名の子ウィンドウを Z オーダー順に検索する。
+    /// Finds a child window with the specified class name, in Z order.
+    /// </summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr FindWindowEx(IntPtr hWndParent, IntPtr hWndChildAfter, string? lpszClass, string? lpszWindow);
+
     // Modifier keys
     public const uint MOD_ALT = 0x0001;
     public const uint MOD_CONTROL = 0x0002;
