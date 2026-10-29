@@ -47,6 +47,12 @@ internal static class ExplorerHelper
     /// <returns>パス文字列。取得できない場合はデスクトップパス。 / Path string, or desktop path if not retrievable.</returns>
     private static string? GetExplorerPathFromWindow(IntPtr targetHwnd)
     {
+        // Windows 11 のタブでは全タブが同じトップレベル HWND を共有するため、
+        // Z オーダー最前面の ShellTabWindowClass（＝アクティブタブ）で照合する。
+        // With Windows 11 tabs, all tabs share the same top-level HWND,
+        // so match against the topmost ShellTabWindowClass (the active tab).
+        IntPtr activeTab = Win32Api.FindWindowEx(targetHwnd, IntPtr.Zero, "ShellTabWindowClass", null);
+
         try
         {
             Type? shellWindowsType = Type.GetTypeFromProgID("Shell.Application");
@@ -65,7 +71,8 @@ internal static class ExplorerHelper
                 {
                     try
                     {
-                        if (window.HWND == (int)targetHwnd)
+                        if (window.HWND == (int)targetHwnd
+                            && (activeTab == IntPtr.Zero || GetTabWindow(window) == activeTab))
                         {
                             string? locationUrl = window.LocationURL as string;
                             if (!string.IsNullOrEmpty(locationUrl))
@@ -104,6 +111,53 @@ internal static class ExplorerHelper
         }
 
         return GetDefaultPath();
+    }
+
+    /// <summary>
+    /// シェルウィンドウ（タブ）に対応する ShellTabWindowClass のウィンドウハンドルを取得する。
+    /// Retrieves the ShellTabWindowClass window handle for a shell window (tab).
+    /// </summary>
+    /// <param name="window">Shell.Application.Windows() の要素。 / An item of Shell.Application.Windows().</param>
+    /// <returns>タブのウィンドウハンドル。取得できない場合は IntPtr.Zero。 / Tab window handle, or IntPtr.Zero if not retrievable.</returns>
+    private static IntPtr GetTabWindow(object window)
+    {
+        if (window is not IServiceProvider serviceProvider)
+            return IntPtr.Zero;
+
+        Guid sidTopLevelBrowser = SID_STopLevelBrowser;
+        Guid iidShellBrowser = typeof(IShellBrowser).GUID;
+        serviceProvider.QueryService(ref sidTopLevelBrowser, ref iidShellBrowser, out object browserObject);
+        try
+        {
+            ((IShellBrowser)browserObject).GetWindow(out IntPtr hwnd);
+            return hwnd;
+        }
+        finally
+        {
+            Marshal.ReleaseComObject(browserObject);
+        }
+    }
+
+    private static readonly Guid SID_STopLevelBrowser = new("4C96BE40-915C-11CF-99D3-00AA004AE837");
+
+    [ComImport]
+    [Guid("6D5140C1-7436-11CE-8034-00AA006009FA")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IServiceProvider
+    {
+        void QueryService(ref Guid guidService, ref Guid riid, [MarshalAs(UnmanagedType.Interface)] out object ppvObject);
+    }
+
+    /// <summary>
+    /// IShellBrowser のうち先頭の IOleWindow::GetWindow のみを宣言したもの。
+    /// IShellBrowser declaring only its first method, IOleWindow::GetWindow.
+    /// </summary>
+    [ComImport]
+    [Guid("000214E2-0000-0000-C000-000000000046")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellBrowser
+    {
+        void GetWindow(out IntPtr phwnd);
     }
 
     /// <summary>
