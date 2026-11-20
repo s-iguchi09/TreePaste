@@ -162,8 +162,7 @@ public class MainViewModel : INotifyPropertyChanged
     {
         Clear();
 
-        var clipboardPaths = RemoveNestedPaths(ClipboardHelper.GetClipboardFilePaths()
-            .Select(p => p.Length > 3 ? p.TrimEnd(Path.DirectorySeparatorChar) : p));
+        var clipboardPaths = NormalizePaths(ClipboardHelper.GetClipboardFilePaths());
 
         if (clipboardPaths.Count == 0)
         {
@@ -193,8 +192,10 @@ public class MainViewModel : INotifyPropertyChanged
             Segments.Add(segment);
         }
 
-        // 共通の親から下をツリーにする（親が違う項目は途中のフォルダーを挟む）
-        // Everything below the shared parent becomes the tree (intermediate folders are added for items with different parents)
+        // 共通の親から下をツリーにする（親が違う項目は途中のフォルダーを挟む）。
+        // 浅い順に並んでいるので、コピーしたフォルダーの中にある項目は、すでにあるそのフォルダーのノードの中に入る。
+        // Everything below the shared parent becomes the tree (intermediate folders are added for items with different parents).
+        // Paths are ordered shallowest first, so an item inside a copied folder goes into that folder's existing node.
         for (int i = 0; i < clipboardPaths.Count; i++)
             AddToTree(clipboardPaths[i], partsList[i][commonLength..]);
 
@@ -206,21 +207,22 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// 重複したパスと、ほかにコピーしたフォルダーの中にあるパスを取り除く（元の並び順は保つ）。
-    /// フォルダーの中身はそのフォルダーのノードに含まれるので、別に追加すると同じ項目がツリーに2回出てしまう。
-    /// Removes duplicate paths and paths inside another copied folder (keeping the original order).
-    /// A folder's contents are already included in its node, so adding them separately would show the same item twice in the tree.
+    /// クリップボードのパスを正規化し（".." などを解決し、末尾の区切りを取る）、重複を除いて浅い順に並べる。
+    /// 同じ深さの中では元の並び順を保つ。
+    /// Normalizes the clipboard paths (resolving ".." and the like, trimming the trailing separator),
+    /// removes duplicates and orders them shallowest first, keeping the original order within the same depth.
     /// </summary>
-    private static List<string> RemoveNestedPaths(IEnumerable<string> paths)
+    private static List<string> NormalizePaths(IEnumerable<string> paths)
     {
-        var distinct = paths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var folderPrefixes = distinct
-            .Select(p => p.EndsWith(Path.DirectorySeparatorChar) ? p : p + Path.DirectorySeparatorChar)
-            .ToList();
-
-        return distinct
-            .Where(p => !folderPrefixes.Any(prefix =>
-                p.Length > prefix.Length && p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+        return paths
+            .Select(p =>
+            {
+                try { p = Path.GetFullPath(p); }
+                catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { }
+                return p.Length > 3 ? p.TrimEnd(Path.DirectorySeparatorChar) : p;
+            })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(p => p.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries).Length)
             .ToList();
     }
 
@@ -242,7 +244,11 @@ public class MainViewModel : INotifyPropertyChanged
 
     /// <summary>
     /// コピーした項目をツリーに追加する。相対パスが2段以上なら途中のフォルダーノードを作る（同名は共有）。
+    /// 同じ場所にすでに同じ名前のノードがあれば（コピーしたフォルダーの中身として読み込み済みなら）追加しない。
+    /// フォルダーの中身を読めなかったときは、その中に明示的にコピーした項目だけを追加する。
     /// Adds a copied item to the tree. Creates intermediate folder nodes (shared by name) when the relative path is deeper than one level.
+    /// If a node with the same name already exists at that spot (already loaded as part of a copied folder), it is not added again.
+    /// If a folder's contents could not be read, only the items explicitly copied inside it are added.
     /// </summary>
     /// <param name="fullPath">コピーした項目のフルパス。 / Full path of the copied item.</param>
     /// <param name="relativeParts">共通の親からの相対セグメント。 / Segments relative to the shared parent.</param>
@@ -268,8 +274,12 @@ public class MainViewModel : INotifyPropertyChanged
             siblings = folder.Children;
         }
 
+        var leafName = SanitizeName(relativeParts.Length > 0 ? relativeParts[^1] : fullPath);
+        if (siblings.Any(s => string.Equals(s.Name, leafName, StringComparison.OrdinalIgnoreCase)))
+            return;
+
         var item = CreateFileTreeItem(fullPath);
-        item.Name = SanitizeName(relativeParts.Length > 0 ? relativeParts[^1] : item.Name);
+        item.Name = leafName;
         siblings.Add(item);
     }
 
