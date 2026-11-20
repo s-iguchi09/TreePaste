@@ -23,7 +23,7 @@ public class MainViewModel : INotifyPropertyChanged
     private bool _canPaste;
     private bool _isFlatten;
     private string _previewText = string.Empty;
-    private bool _previewRefreshQueued;
+    private bool _checkStateRefreshQueued;
     private readonly List<FileTreeItem> _subscribedItems = new();
 
     /// <summary>
@@ -440,12 +440,20 @@ public class MainViewModel : INotifyPropertyChanged
         }
         else
         {
+            // 貼り付けを始めた時点のチェック状態で計画を作る（コピー中にチェックを変えても影響しない）
+            // Build the plan from the check states at the time the paste starts (changing checks during the copy has no effect)
             string baseDestination = GetBaseDestination(destination);
-            var roots = RootItems.ToList();
+            var folders = new List<string>();
+            var files = new List<(string Source, string Destination)>();
+            foreach (var root in RootItems)
+                PlanCheckedItems(root, Path.Combine(baseDestination, root.Name), folders, files);
+
             copy = () =>
             {
-                foreach (var root in roots)
-                    CopyCheckedItems(root, Path.Combine(baseDestination, root.Name));
+                foreach (var folder in folders)
+                    Directory.CreateDirectory(folder);
+                foreach (var (source, dest) in files)
+                    File.Copy(source, dest, overwrite: true);
             };
         }
 
@@ -527,9 +535,14 @@ public class MainViewModel : INotifyPropertyChanged
     private static string NumberedName(string fileName, int n)
         => $"{Path.GetFileNameWithoutExtension(fileName)} ({n}){Path.GetExtension(fileName)}";
 
+    private const int ERROR_FILE_EXISTS = 80;
+    private const int ERROR_ALREADY_EXISTS = 183;
+
     /// <summary>
     /// 上書きせずにコピーする。計画したあとに同じ名前ができていたら、空いている "name (n).ext" にコピーする。
+    /// 名前を変えるのは「すでにある」ことで失敗したときだけで、コピーの途中で失敗したときは作りかけのファイルを消してエラーにする。
     /// Copies without overwriting. If the planned name has appeared since planning, copies to the next free "name (n).ext".
+    /// It renames only when the copy fails because the name already exists; on any other failure it removes the partial file and rethrows.
     /// </summary>
     private static void CopyWithoutOverwrite(string source, string destPath)
     {
@@ -539,15 +552,29 @@ public class MainViewModel : INotifyPropertyChanged
         int n = 2;
         while (true)
         {
+            if (File.Exists(target) || Directory.Exists(target))
+            {
+                target = Path.Combine(folder, NumberedName(originalName, n++));
+                continue;
+            }
+
             try
             {
                 File.Copy(source, target, overwrite: false);
                 return;
             }
-            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException)
-                                       && (File.Exists(target) || Directory.Exists(target)))
+            catch (IOException ex) when ((ex.HResult & 0xFFFF) is ERROR_FILE_EXISTS or ERROR_ALREADY_EXISTS)
             {
+                // 確認したあとに同じ名前ができた（このコピーは何も書いていない）
+                // The name appeared after the check (this copy wrote nothing)
                 target = Path.Combine(folder, NumberedName(originalName, n++));
+            }
+            catch
+            {
+                // 「すでにある」以外の失敗なら、そこにあるのはこのコピーが作りかけたファイル
+                // Any other failure means whatever is at the target was partially written by this copy
+                try { File.Delete(target); } catch { }
+                throw;
             }
         }
     }
@@ -573,12 +600,17 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// チェックされたアイテムのみを再帰的にコピーする。
-    /// Recursively copies only checked items.
+    /// チェックされたアイテムについて、作るフォルダーとコピーするファイルを再帰的に集める。
+    /// フォルダーは親から順に並ぶので、先頭から作ればファイルの置き場所がそろう。
+    /// Recursively collects the folders to create and the files to copy for checked items.
+    /// Folders are listed parent first, so creating them in order prepares every file's location.
     /// </summary>
     /// <param name="item">コピー元の <see cref="FileTreeItem"/>。 / Source <see cref="FileTreeItem"/>.</param>
     /// <param name="destPath">コピー先のパス。 / Destination path.</param>
-    private static void CopyCheckedItems(FileTreeItem item, string destPath)
+    /// <param name="folders">作るフォルダー。 / Folders to create.</param>
+    /// <param name="files">コピーするファイル。 / Files to copy.</param>
+    private static void PlanCheckedItems(FileTreeItem item, string destPath,
+        List<string> folders, List<(string Source, string Destination)> files)
     {
         if (!HasAnyCheckedItem(item)) return;
 
@@ -586,14 +618,14 @@ public class MainViewModel : INotifyPropertyChanged
         {
             string? parentDir = Path.GetDirectoryName(destPath);
             if (!string.IsNullOrEmpty(parentDir))
-                Directory.CreateDirectory(parentDir);
-            File.Copy(item.FullPath, destPath, overwrite: true);
+                folders.Add(parentDir);
+            files.Add((item.FullPath, destPath));
             return;
         }
 
-        Directory.CreateDirectory(destPath);
+        folders.Add(destPath);
         foreach (var child in item.Children)
-            CopyCheckedItems(child, Path.Combine(destPath, child.Name));
+            PlanCheckedItems(child, Path.Combine(destPath, child.Name), folders, files);
     }
 
     // ━━━ チェック状態の監視 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -625,29 +657,30 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// アイテムの IsChecked が変わったら CanPaste をすぐに更新し、説明の更新は予約する。
-    /// Updates CanPaste immediately and schedules a preview refresh when an item's IsChecked changes.
+    /// アイテムの IsChecked が変わったら、CanPaste と説明の更新を予約する。
+    /// Schedules a CanPaste and preview refresh when an item's IsChecked changes.
     /// </summary>
     private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(FileTreeItem.IsChecked)) return;
-        UpdateCanPaste();
-        QueuePreviewRefresh();
+        QueueCheckStateRefresh();
     }
 
     /// <summary>
-    /// 説明の更新を1回だけ予約する。フォルダーのチェックで子孫のチェックが一度に変わっても、
-    /// 伝播が終わってから1回だけ作り直す。
-    /// Schedules a single preview refresh. Even when checking a folder changes all its descendants at once,
-    /// the preview is rebuilt only once after the propagation finishes.
+    /// CanPaste と説明の更新を1回だけ予約する。フォルダーのチェックで子孫のチェックが一度に変わっても、
+    /// 伝播が終わってから1回だけ計算し直す。入力より優先度が高いので、次のクリックやキー操作の前に終わる。
+    /// Schedules a single CanPaste and preview refresh. Even when checking a folder changes all its descendants at once,
+    /// they are recalculated only once after the propagation finishes. It runs at a higher priority than input,
+    /// so it completes before the next click or key press.
     /// </summary>
-    private void QueuePreviewRefresh()
+    private void QueueCheckStateRefresh()
     {
-        if (_previewRefreshQueued) return;
-        _previewRefreshQueued = true;
+        if (_checkStateRefreshQueued) return;
+        _checkStateRefreshQueued = true;
         System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
         {
-            _previewRefreshQueued = false;
+            _checkStateRefreshQueued = false;
+            UpdateCanPaste();
             UpdatePreview();
         }, DispatcherPriority.DataBind);
     }
