@@ -202,19 +202,59 @@ public partial class MainWindow : Window
         Show();
         Activate();
         Topmost = true;
-        Focus();
+
+        // 開いたときはツリーにフォーカスを置く（矢印キーとスペースでチェックを操作できる）
+        // Focus the tree when shown (checks can be operated with the arrow keys and Space)
+        FileTree.Focus();
     }
 
     // ━━━ キーボード ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /// <summary>
-    /// キーダウンイベントを処理する。Escape キーでウィンドウを隠す。
-    /// Handles key down events. Hides the window when the Escape key is pressed.
+    /// キー操作を処理する。Escape で隠す、Alt+←/→ で起点の階層を動かす、Alt+F で Flatten を切り替える。
+    /// （Enter での貼り付けは Paste ボタンの IsDefault で行う）
+    /// Handles key presses. Escape hides the window, Alt+Left/Right moves the starting level, Alt+F toggles Flatten.
+    /// (Enter pastes through the Paste button's IsDefault.)
     /// </summary>
-    private void Window_KeyDown(object sender, KeyEventArgs e)
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)
+        {
             HideWindow();
+            e.Handled = true;
+            return;
+        }
+
+        // フォーカスがどこにあっても Enter は貼り付けにする（Cancel ボタンにフォーカスがあると Enter で Cancel が押されるため）
+        // Enter always pastes wherever the focus is (otherwise Enter clicks the Cancel button when it has focus)
+        if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None)
+        {
+            if (ViewModel.PasteCommand.CanExecute(null))
+                ViewModel.PasteCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
+        // Alt との組み合わせは Key.System として届く
+        // Combinations with Alt arrive as Key.System
+        if (e.Key != Key.System || Keyboard.Modifiers != ModifierKeys.Alt)
+            return;
+
+        switch (e.SystemKey)
+        {
+            case Key.Left:
+                ViewModel.MoveSelection(-1);
+                e.Handled = true;
+                break;
+            case Key.Right:
+                ViewModel.MoveSelection(+1);
+                e.Handled = true;
+                break;
+            case Key.F:
+                ViewModel.ToggleFlatten();
+                e.Handled = true;
+                break;
+        }
     }
 
     // ━━━ ウィンドウ終了処理 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

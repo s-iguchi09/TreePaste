@@ -13,8 +13,6 @@ public class FileTreeItem : INotifyPropertyChanged
     private string _name = string.Empty;
     private string _fullPath = string.Empty;
     private bool _isDirectory;
-    private bool _isPathFolder;
-    private bool _isClipboardItem;
     private bool? _isChecked = true;
 
     /// <summary>
@@ -45,26 +43,6 @@ public class FileTreeItem : INotifyPropertyChanged
     {
         get => _isDirectory;
         set { _isDirectory = value; OnPropertyChanged(); }
-    }
-
-    /// <summary>
-    /// パスの途中フォルダーノード（クリップボードアイテムそのものではない）。
-    /// Intermediate folder node in the path (not the clipboard item itself).
-    /// </summary>
-    public bool IsPathFolder
-    {
-        get => _isPathFolder;
-        set { _isPathFolder = value; OnPropertyChanged(); }
-    }
-
-    /// <summary>
-    /// クリップボードから来た実際のアイテム。
-    /// Actual item originating from the clipboard.
-    /// </summary>
-    public bool IsClipboardItem
-    {
-        get => _isClipboardItem;
-        set { _isClipboardItem = value; OnPropertyChanged(); }
     }
 
     /// <summary>
