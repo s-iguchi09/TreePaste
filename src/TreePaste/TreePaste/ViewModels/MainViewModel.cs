@@ -539,43 +539,50 @@ public class MainViewModel : INotifyPropertyChanged
     private const int ERROR_ALREADY_EXISTS = 183;
 
     /// <summary>
-    /// 上書きせずにコピーする。計画したあとに同じ名前ができていたら、空いている "name (n).ext" にコピーする。
-    /// 名前を変えるのは「すでにある」ことで失敗したときだけで、コピーの途中で失敗したときは作りかけのファイルを消してエラーにする。
-    /// Copies without overwriting. If the planned name has appeared since planning, copies to the next free "name (n).ext".
-    /// It renames only when the copy fails because the name already exists; on any other failure it removes the partial file and rethrows.
+    /// 上書きせずにコピーする。いったん同じフォルダーの一時ファイル（この処理だけが使う名前）にコピーしてから、
+    /// 上書きしない名前の変更で置き場所に移す。計画したあとに同じ名前ができていたら、空いている "name (n).ext" に移す。
+    /// 失敗したときに消すのはこの処理が作った一時ファイルだけなので、ほかの処理が作ったファイルを消すことはない。
+    /// Copies without overwriting. It first copies to a temporary file in the same folder (a name only this operation uses),
+    /// then moves it into place with a non-overwriting rename. If the planned name has appeared since planning, it moves to the next free "name (n).ext".
+    /// On failure it deletes only the temporary file it created, so it never deletes a file created by another process.
     /// </summary>
     private static void CopyWithoutOverwrite(string source, string destPath)
     {
         string folder = Path.GetDirectoryName(destPath)!;
         string originalName = Path.GetFileName(source);
-        string target = destPath;
-        int n = 2;
-        while (true)
-        {
-            if (File.Exists(target) || Directory.Exists(target))
-            {
-                target = Path.Combine(folder, NumberedName(originalName, n++));
-                continue;
-            }
+        string tempPath = Path.Combine(folder, $".treepaste-{Guid.NewGuid():N}.tmp");
 
-            try
+        try
+        {
+            File.Copy(source, tempPath, overwrite: false);
+
+            string target = destPath;
+            int n = 2;
+            while (true)
             {
-                File.Copy(source, target, overwrite: false);
-                return;
+                if (File.Exists(target) || Directory.Exists(target))
+                {
+                    target = Path.Combine(folder, NumberedName(originalName, n++));
+                    continue;
+                }
+
+                try
+                {
+                    File.Move(tempPath, target, overwrite: false);
+                    return;
+                }
+                catch (IOException ex) when ((ex.HResult & 0xFFFF) is ERROR_FILE_EXISTS or ERROR_ALREADY_EXISTS)
+                {
+                    // 確認したあとに同じ名前ができた
+                    // The name appeared after the check
+                    target = Path.Combine(folder, NumberedName(originalName, n++));
+                }
             }
-            catch (IOException ex) when ((ex.HResult & 0xFFFF) is ERROR_FILE_EXISTS or ERROR_ALREADY_EXISTS)
-            {
-                // 確認したあとに同じ名前ができた（このコピーは何も書いていない）
-                // The name appeared after the check (this copy wrote nothing)
-                target = Path.Combine(folder, NumberedName(originalName, n++));
-            }
-            catch
-            {
-                // 「すでにある」以外の失敗なら、そこにあるのはこのコピーが作りかけたファイル
-                // Any other failure means whatever is at the target was partially written by this copy
-                try { File.Delete(target); } catch { }
-                throw;
-            }
+        }
+        catch
+        {
+            try { File.Delete(tempPath); } catch { }
+            throw;
         }
     }
 
