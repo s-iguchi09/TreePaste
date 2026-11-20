@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using TreePaste.Models;
 using TreePaste.Services;
 using MessageBox = System.Windows.MessageBox;
@@ -22,6 +23,7 @@ public class MainViewModel : INotifyPropertyChanged
     private bool _canPaste;
     private bool _isFlatten;
     private string _previewText = string.Empty;
+    private bool _previewRefreshQueued;
     private readonly List<FileTreeItem> _subscribedItems = new();
 
     /// <summary>
@@ -406,7 +408,7 @@ public class MainViewModel : INotifyPropertyChanged
             string files = plan.Count == 1 ? "1 file" : $"{plan.Count} files";
             PreviewText = renamed == 0
                 ? $"→ {_destinationPath}  ({files} directly)"
-                : $"→ {_destinationPath}  ({files} directly, {renamed} renamed for duplicate names)";
+                : $"→ {_destinationPath}  ({files} directly, {renamed} renamed to avoid overwriting)";
             return;
         }
 
@@ -433,7 +435,7 @@ public class MainViewModel : INotifyPropertyChanged
             {
                 Directory.CreateDirectory(destination);
                 foreach (var (source, dest, _) in plan)
-                    File.Copy(source, dest, overwrite: true);
+                    CopyWithoutOverwrite(source, dest);
             };
         }
         else
@@ -473,8 +475,12 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// 平らに貼り付けるときのコピー元とコピー先を決める。同じ名前が重なったら "name (2).ext" のように名前を変える。
-    /// Plans the sources and destinations for a flat paste. Duplicate names are renamed like "name (2).ext".
+    /// 平らに貼り付けるときのコピー元とコピー先を決める。
+    /// 貼り付け先にすでにある名前と、今回の貼り付けで使う名前は重ならないようにし、重なったら "name (2).ext" のように名前を変える。
+    /// （上書きすると、貼り付け先にあるコピー元のファイルを先に壊してしまうことがあるため）
+    /// Plans the sources and destinations for a flat paste.
+    /// Names never collide with names already in the destination or used by this paste; collisions are renamed like "name (2).ext".
+    /// (Overwriting could destroy a checked source located in the destination before it is copied.)
     /// </summary>
     /// <param name="destination">貼り付け先のフォルダー。 / Destination folder.</param>
     private List<(string Source, string Destination, bool Renamed)> PlanFlatten(string destination)
@@ -482,18 +488,29 @@ public class MainViewModel : INotifyPropertyChanged
         var plan = new List<(string, string, bool)>();
         var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // 貼り付け先にすでにあるファイルとフォルダーの名前を先に押さえる
+        // Reserve the names of files and folders that already exist in the destination
+        try
+        {
+            foreach (var entry in Directory.EnumerateFileSystemEntries(destination))
+                usedNames.Add(Path.GetFileName(entry));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 読めなければ、コピーするときの上書きしない処理に任せる
+            // If it cannot be read, rely on the no-overwrite handling at copy time
+        }
+
         foreach (var file in RootItems.SelectMany(GetCheckedFiles))
         {
             string name = file.Name;
             bool renamed = false;
             if (!usedNames.Add(name))
             {
-                string stem = Path.GetFileNameWithoutExtension(file.Name);
-                string ext = Path.GetExtension(file.Name);
                 int n = 2;
                 do
                 {
-                    name = $"{stem} ({n++}){ext}";
+                    name = NumberedName(file.Name, n++);
                 } while (!usedNames.Add(name));
                 renamed = true;
             }
@@ -501,6 +518,38 @@ public class MainViewModel : INotifyPropertyChanged
         }
 
         return plan;
+    }
+
+    /// <summary>
+    /// "name.ext" を "name (n).ext" にする。
+    /// Turns "name.ext" into "name (n).ext".
+    /// </summary>
+    private static string NumberedName(string fileName, int n)
+        => $"{Path.GetFileNameWithoutExtension(fileName)} ({n}){Path.GetExtension(fileName)}";
+
+    /// <summary>
+    /// 上書きせずにコピーする。計画したあとに同じ名前ができていたら、空いている "name (n).ext" にコピーする。
+    /// Copies without overwriting. If the planned name has appeared since planning, copies to the next free "name (n).ext".
+    /// </summary>
+    private static void CopyWithoutOverwrite(string source, string destPath)
+    {
+        string folder = Path.GetDirectoryName(destPath)!;
+        string originalName = Path.GetFileName(source);
+        string target = destPath;
+        int n = 2;
+        while (true)
+        {
+            try
+            {
+                File.Copy(source, target, overwrite: false);
+                return;
+            }
+            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException)
+                                       && (File.Exists(target) || Directory.Exists(target)))
+            {
+                target = Path.Combine(folder, NumberedName(originalName, n++));
+            }
+        }
     }
 
     /// <summary>
@@ -576,14 +625,31 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// アイテムの IsChecked が変わったら CanPaste と説明を更新する。
-    /// Updates CanPaste and the preview when an item's IsChecked changes.
+    /// アイテムの IsChecked が変わったら CanPaste をすぐに更新し、説明の更新は予約する。
+    /// Updates CanPaste immediately and schedules a preview refresh when an item's IsChecked changes.
     /// </summary>
     private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(FileTreeItem.IsChecked)) return;
         UpdateCanPaste();
-        UpdatePreview();
+        QueuePreviewRefresh();
+    }
+
+    /// <summary>
+    /// 説明の更新を1回だけ予約する。フォルダーのチェックで子孫のチェックが一度に変わっても、
+    /// 伝播が終わってから1回だけ作り直す。
+    /// Schedules a single preview refresh. Even when checking a folder changes all its descendants at once,
+    /// the preview is rebuilt only once after the propagation finishes.
+    /// </summary>
+    private void QueuePreviewRefresh()
+    {
+        if (_previewRefreshQueued) return;
+        _previewRefreshQueued = true;
+        System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            _previewRefreshQueued = false;
+            UpdatePreview();
+        }, DispatcherPriority.DataBind);
     }
 
     /// <summary>

@@ -18,7 +18,7 @@ You can choose the folder level from a breadcrumb of the source path and paste f
 - Press **Ctrl+Alt+V** at any time to bring up the window
 - Displays files and folders copied to the clipboard as a tree, with check boxes to choose what to paste
 - Shows the source path as a breadcrumb; select a level to recreate the folders from that level (click it again to deselect and paste the items as they are)
-- **Flatten** pastes the checked files directly into the destination, ignoring folders (duplicate names get " (2)" etc.)
+- **Flatten** pastes the checked files directly into the destination, ignoring folders (it never overwrites: names that are duplicated or already in the destination get " (2)" etc.)
 - Shows where the items will be created before pasting
 - Keyboard: **Alt+← / Alt+→** to choose a level, **Alt+F** to toggle Flatten, **Enter** to paste, **Esc** to cancel
 - Automatically detects the path of the active Explorer window and sets it as the paste destination
@@ -76,7 +76,7 @@ This uses the same publish profile as the release workflow and produces a self-c
 - **Ctrl+Alt+V** でいつでもウィンドウを呼び出せる
 - クリップボードにコピーされたファイル・フォルダーをツリー表示し、チェックボックスでペーストする項目を選択可能
 - コピー元のパスをパンくずで表示し、階層を選ぶとその階層からフォルダーを作ってペースト（もう一度押すと選択が外れ、そのままペースト）
-- **Flatten** でチェックしたファイルを階層を無視してペースト先の直下にペースト（同じ名前は「 (2)」などを付けて保存）
+- **Flatten** でチェックしたファイルを階層を無視してペースト先の直下にペースト（上書きはせず、重なる名前やペースト先にすでにある名前には「 (2)」などを付けて保存）
 - ペーストする前に、作られる場所を表示
 - キー操作：**Alt+← / Alt+→** で階層を選択、**Alt+F** で Flatten の切り替え、**Enter** でペースト、**Esc** でキャンセル
 - アクティブなエクスプローラーウィンドウのパスを自動検出し、ペースト先として設定
