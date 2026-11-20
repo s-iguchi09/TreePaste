@@ -162,9 +162,8 @@ public class MainViewModel : INotifyPropertyChanged
     {
         Clear();
 
-        var clipboardPaths = ClipboardHelper.GetClipboardFilePaths()
-            .Select(p => p.Length > 3 ? p.TrimEnd(Path.DirectorySeparatorChar) : p)
-            .ToList();
+        var clipboardPaths = RemoveNestedPaths(ClipboardHelper.GetClipboardFilePaths()
+            .Select(p => p.Length > 3 ? p.TrimEnd(Path.DirectorySeparatorChar) : p));
 
         if (clipboardPaths.Count == 0)
         {
@@ -204,6 +203,25 @@ public class MainViewModel : INotifyPropertyChanged
 
         UpdateCanPaste();
         UpdatePreview();
+    }
+
+    /// <summary>
+    /// 重複したパスと、ほかにコピーしたフォルダーの中にあるパスを取り除く（元の並び順は保つ）。
+    /// フォルダーの中身はそのフォルダーのノードに含まれるので、別に追加すると同じ項目がツリーに2回出てしまう。
+    /// Removes duplicate paths and paths inside another copied folder (keeping the original order).
+    /// A folder's contents are already included in its node, so adding them separately would show the same item twice in the tree.
+    /// </summary>
+    private static List<string> RemoveNestedPaths(IEnumerable<string> paths)
+    {
+        var distinct = paths.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var folderPrefixes = distinct
+            .Select(p => p.EndsWith(Path.DirectorySeparatorChar) ? p : p + Path.DirectorySeparatorChar)
+            .ToList();
+
+        return distinct
+            .Where(p => !folderPrefixes.Any(prefix =>
+                p.Length > prefix.Length && p.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
     }
 
     /// <summary>
