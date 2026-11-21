@@ -10,14 +10,17 @@ Website: [English](https://s-iguchi09.github.io/apps/treepaste.html) | [日本�
 ## Overview (English)
 
 TreePaste is a tool that pastes files copied to the clipboard while preserving the original folder structure.  
-You can select the folder hierarchy level from a tree view and paste from any level you choose.
+You can choose the folder level from a breadcrumb of the source path and paste from any level you choose.
 
 ### Features
 
 - Resides in the **system tray** on startup and runs in the background
 - Press **Ctrl+Alt+V** at any time to bring up the window
-- Displays files and folders copied to the clipboard as a tree
-- Click on a folder node in the tree to select the paste destination level
+- Displays files and folders copied to the clipboard as a tree, with check boxes to choose what to paste
+- Shows the source path as a breadcrumb; select a level to recreate the folders from that level (click it again to deselect and paste the items as they are)
+- **Flatten** pastes the checked files directly into the destination, ignoring folders (it never overwrites: names that are duplicated or already in the destination get " (2)" etc.)
+- Shows where the items will be created before pasting
+- Keyboard: **Alt+← / Alt+→** to choose a level, **Alt+F** to toggle Flatten, **Enter** to paste, **Esc** to cancel
 - Automatically detects the path of the active Explorer window and sets it as the paste destination
 - Falls back to the Desktop if no Explorer window is found
 
@@ -27,8 +30,8 @@ You can select the folder hierarchy level from a tree view and paste from any le
 2. Copy the files you want to paste in Explorer (Ctrl+C)
 3. Open the destination folder in Explorer
 4. Press **Ctrl+Alt+V** to bring up the window
-5. Select the paste starting point from the folder hierarchy shown in the tree view
-6. Execute the paste
+5. Check the items to paste, and if needed select the starting level in the breadcrumb or turn on Flatten
+6. Click **Paste** (or press Enter)
 
 ### Requirements
 
@@ -65,14 +68,17 @@ This uses the same publish profile as the release workflow and produces a self-c
 ## 概要 (Japanese)
 
 クリップボードにコピーしたファイルを、フォルダー構成を維持したままペーストするツールです。  
-ツリー表示でフォルダー階層を選択し、任意の階層からペーストできます。
+コピー元のパスをパンくずで表示し、任意の階層からペーストできます。
 
 ### 機能
 
 - 起動するとタスクトレイに常駐し、バックグラウンドで動作
 - **Ctrl+Alt+V** でいつでもウィンドウを呼び出せる
-- クリップボードにコピーされたファイル・フォルダーをツリー表示
-- ツリー上のフォルダー階層をクリックして、ペースト先の起点を選択可能
+- クリップボードにコピーされたファイル・フォルダーをツリー表示し、チェックボックスでペーストする項目を選択可能
+- コピー元のパスをパンくずで表示し、階層を選ぶとその階層からフォルダーを作ってペースト（もう一度押すと選択が外れ、そのままペースト）
+- **Flatten** でチェックしたファイルを階層を無視してペースト先の直下にペースト（上書きはせず、重なる名前やペースト先にすでにある名前には「 (2)」などを付けて保存）
+- ペーストする前に、作られる場所を表示
+- キー操作：**Alt+← / Alt+→** で階層を選択、**Alt+F** で Flatten の切り替え、**Enter** でペースト、**Esc** でキャンセル
 - アクティブなエクスプローラーウィンドウのパスを自動検出し、ペースト先として設定
 - エクスプローラーが見つからない場合はデスクトップをペースト先に設定
 
@@ -82,8 +88,8 @@ This uses the same publish profile as the release workflow and produces a self-c
 2. ペーストしたいファイルをエクスプローラーでコピー（Ctrl+C）
 3. エクスプローラーでペースト先フォルダーを開く
 4. **Ctrl+Alt+V** でウィンドウを呼び出す
-5. ツリービューに表示されたフォルダー階層から、ペースト起点を選択
-6. ペーストを実行
+5. ペーストする項目にチェックを付け、必要ならパンくずで起点の階層を選ぶか Flatten をオンにする
+6. **Paste** を押す（または Enter）
 
 ### 動作環境
 

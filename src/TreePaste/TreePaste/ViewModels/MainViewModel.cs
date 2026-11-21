@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using TreePaste.Models;
 using TreePaste.Services;
 using MessageBox = System.Windows.MessageBox;
@@ -19,7 +20,10 @@ public class MainViewModel : INotifyPropertyChanged
     private string _destinationPathText = "Loading...";
     private string? _destinationPath;
     private bool _isProcessing;
-    private bool _canPaste = true;
+    private bool _canPaste;
+    private bool _isFlatten;
+    private string _previewText = string.Empty;
+    private bool _checkStateRefreshQueued;
     private readonly List<FileTreeItem> _subscribedItems = new();
 
     /// <summary>
@@ -54,10 +58,36 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// ツリービューのルートアイテムコレクション。
-    /// Root item collection for the tree view.
+    /// ツリービューのルートアイテムコレクション（コピーした項目）。
+    /// Root item collection for the tree view (the copied items).
     /// </summary>
     public ObservableCollection<FileTreeItem> RootItems { get; } = new();
+
+    /// <summary>
+    /// コピー元フォルダーのパンくず。
+    /// Breadcrumb of the source folder.
+    /// </summary>
+    public ObservableCollection<PathSegment> Segments { get; } = new();
+
+    /// <summary>
+    /// チェックしたファイルを階層を無視して貼り付け先の直下に貼り付けるかどうか。
+    /// パンくずの階層選択とは排他。
+    /// Whether to paste checked files directly into the destination, ignoring the hierarchy.
+    /// Mutually exclusive with the breadcrumb level selection.
+    /// </summary>
+    public bool IsFlatten
+    {
+        get => _isFlatten;
+        set
+        {
+            if (_isFlatten == value) return;
+            _isFlatten = value;
+            OnPropertyChanged();
+            if (value)
+                ClearSegmentSelection();
+            UpdatePreview();
+        }
+    }
 
     /// <summary>
     /// UIに表示するコピー先パスのテキスト。
@@ -70,16 +100,26 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// 現在の選択で貼り付けたときに作られる場所の説明。
+    /// Description of where items will be created with the current selection.
+    /// </summary>
+    public string PreviewText
+    {
+        get => _previewText;
+        private set { _previewText = value; OnPropertyChanged(); }
+    }
+
+    /// <summary>
     /// キャンセルボタンのコマンド。
     /// Command for the cancel button.
     /// </summary>
     public RelayCommand CancelCommand { get; }
 
     /// <summary>
-    /// パスフォルダーのクリックコマンド。
-    /// Command executed when a path folder node is clicked.
+    /// 貼り付けボタンのコマンド。
+    /// Command for the paste button.
     /// </summary>
-    public RelayCommand<FileTreeItem> PathFolderClickCommand { get; }
+    public RelayCommand PasteCommand { get; }
 
     /// <summary>
     /// コンストラクター。コマンドを初期化する。
@@ -88,7 +128,7 @@ public class MainViewModel : INotifyPropertyChanged
     public MainViewModel()
     {
         CancelCommand = new RelayCommand(OnCancel, () => !IsProcessing);
-        PathFolderClickCommand = new RelayCommand<FileTreeItem>(OnPathFolderClick, folder => !IsProcessing && folder != null && HasAnyCheckedClipboardItem(folder));
+        PasteCommand = new RelayCommand(OnPaste, () => !IsProcessing && CanPaste);
     }
 
     /// <summary>
@@ -112,125 +152,135 @@ public class MainViewModel : INotifyPropertyChanged
         LoadClipboardFiles();
     }
 
+    // ━━━ ツリーとパンくずの構築 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     /// <summary>
-    /// クリップボードのファイルパスを読み込み、ルートアイテムに変換してコレクションへ追加する。
-    /// Reads file paths from the clipboard, converts them to tree items, and adds them to the root collection.
+    /// クリップボードのファイルパスを読み込み、パンくずとツリーを作る。
+    /// Reads file paths from the clipboard and builds the breadcrumb and the tree.
     /// </summary>
     private void LoadClipboardFiles()
     {
-        UnsubscribeFromCheckedChanges();
-        RootItems.Clear();
+        Clear();
 
-        var clipboardPaths = ClipboardHelper.GetClipboardFilePaths();
+        var clipboardPaths = NormalizePaths(ClipboardHelper.GetClipboardFilePaths());
 
         if (clipboardPaths.Count == 0)
         {
-            UpdateCanPaste();
+            UpdatePreview();
             MessageBox.Show("No files in clipboard.",
                 "Info", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
-        foreach (var filePath in clipboardPaths)
+        var partsList = clipboardPaths
+            .Select(p => p.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+            .ToList();
+
+        // すべての項目に共通する親フォルダーをパンくずにする
+        // The parent folder shared by all items becomes the breadcrumb
+        int commonLength = GetCommonParentLength(partsList);
+        var commonParts = partsList[0][..commonLength];
+        for (int i = 0; i < commonParts.Length; i++)
         {
-            var chain = BuildPathChain(filePath);
-            RootItems.Add(chain);
+            var segment = new PathSegment
+            {
+                Name = commonParts[i],
+                FolderName = SanitizeName(commonParts[i]),
+                Index = i
+            };
+            segment.PropertyChanged += OnSegmentPropertyChanged;
+            Segments.Add(segment);
         }
+
+        // 共通の親から下をツリーにする（親が違う項目は途中のフォルダーを挟む）。
+        // 浅い順に並んでいるので、コピーしたフォルダーの中にある項目は、すでにあるそのフォルダーのノードの中に入る。
+        // Everything below the shared parent becomes the tree (intermediate folders are added for items with different parents).
+        // Paths are ordered shallowest first, so an item inside a copied folder goes into that folder's existing node.
+        for (int i = 0; i < clipboardPaths.Count; i++)
+            AddToTree(clipboardPaths[i], partsList[i][commonLength..]);
 
         foreach (var item in RootItems)
             SubscribeToCheckedChanges(item);
 
         UpdateCanPaste();
+        UpdatePreview();
     }
 
     /// <summary>
-    /// ファイルパスをルートから末端まで入れ子のツリーノードに変換する。
-    /// 例: C:\Foo\Bar\file.txt
-    ///   └─ [Foo (IsPathFolder)]
-    ///       └─ [Bar (IsPathFolder)]
-    ///            └─ [file.txt (IsClipboardItem)]
-    /// Converts a full file path into nested tree nodes from root to leaf.
-    /// e.g. C:\Foo\Bar\file.txt → [Foo (IsPathFolder)] → [Bar (IsPathFolder)] → [file.txt (IsClipboardItem)]
+    /// クリップボードのパスを正規化し（".." などを解決し、末尾の区切りを取る）、重複を除いて浅い順に並べる。
+    /// 同じ深さの中では元の並び順を保つ。
+    /// Normalizes the clipboard paths (resolving ".." and the like, trimming the trailing separator),
+    /// removes duplicates and orders them shallowest first, keeping the original order within the same depth.
     /// </summary>
-    /// <param name="fullPath">変換対象のフルパス。 / Full path to convert.</param>
-    /// <returns>ルートの <see cref="FileTreeItem"/>。 / The root <see cref="FileTreeItem"/>.</returns>
-    private FileTreeItem BuildPathChain(string fullPath)
+    private static List<string> NormalizePaths(IEnumerable<string> paths)
     {
-        var parts = fullPath.Split(Path.DirectorySeparatorChar,
-            StringSplitOptions.RemoveEmptyEntries);
+        return paths
+            .Select(p =>
+            {
+                try { p = Path.GetFullPath(p); }
+                catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { }
+                return p.Length > 3 ? p.TrimEnd(Path.DirectorySeparatorChar) : p;
+            })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(p => p.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries).Length)
+            .ToList();
+    }
 
-        var invalidChars = Path.GetInvalidFileNameChars();
-        string SanitizeName(string name) =>
-            string.Concat(name.Select(c => invalidChars.Contains(c) ? "" : c.ToString()));
-
-        FileTreeItem? root = null;
-        FileTreeItem? current = null;
-
-        for (int i = 0; i < parts.Length - 1; i++)
+    /// <summary>
+    /// すべての項目に共通する親フォルダーのセグメント数を返す。
+    /// Returns the number of segments of the parent folder shared by all items.
+    /// </summary>
+    private static int GetCommonParentLength(List<string[]> partsList)
+    {
+        int length = partsList.Min(p => p.Length - 1);
+        for (int i = 0; i < length; i++)
         {
-            string folderPath;
-            string nodeName;
-            if (i == 0)
-            {
-                // ドライブレターまたはネットワークドライブのルート
-                // Drive letter or network drive root
-                folderPath = parts[0] + Path.DirectorySeparatorChar;
-                nodeName = SanitizeName(parts[0]);
-            }
-            else
-            {
-                folderPath = parts[0] + Path.DirectorySeparatorChar +
-                    string.Join(Path.DirectorySeparatorChar.ToString(), parts.Skip(1).Take(i).ToArray());
-                nodeName = SanitizeName(parts[i]);
-            }
+            var name = partsList[0][i];
+            if (partsList.Any(p => !string.Equals(p[i], name, StringComparison.OrdinalIgnoreCase)))
+                return i;
+        }
+        return Math.Max(length, 0);
+    }
 
-            var node = new FileTreeItem
+    /// <summary>
+    /// コピーした項目をツリーに追加する。相対パスが2段以上なら途中のフォルダーノードを作る（同名は共有）。
+    /// 同じ場所にすでに同じ名前のノードがあれば（コピーしたフォルダーの中身として読み込み済みなら）追加しない。
+    /// フォルダーの中身を読めなかったときは、その中に明示的にコピーした項目だけを追加する。
+    /// Adds a copied item to the tree. Creates intermediate folder nodes (shared by name) when the relative path is deeper than one level.
+    /// If a node with the same name already exists at that spot (already loaded as part of a copied folder), it is not added again.
+    /// If a folder's contents could not be read, only the items explicitly copied inside it are added.
+    /// </summary>
+    /// <param name="fullPath">コピーした項目のフルパス。 / Full path of the copied item.</param>
+    /// <param name="relativeParts">共通の親からの相対セグメント。 / Segments relative to the shared parent.</param>
+    private void AddToTree(string fullPath, string[] relativeParts)
+    {
+        var siblings = RootItems;
+        for (int i = 0; i < relativeParts.Length - 1; i++)
+        {
+            var name = SanitizeName(relativeParts[i]);
+            var folder = siblings.FirstOrDefault(s =>
+                s.IsDirectory && string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (folder == null)
             {
-                Name = nodeName,
-                FullPath = folderPath,
-                IsDirectory = true,
-                IsPathFolder = true,
-                IsClipboardItem = false
-            };
+                // 項目のパスから必要な段数だけ上がったフォルダーのパス
+                // Path of the folder reached by going up the required number of levels from the item
+                string folderPath = fullPath;
+                for (int up = 0; up < relativeParts.Length - 1 - i; up++)
+                    folderPath = Path.GetDirectoryName(folderPath) ?? folderPath;
 
-            if (root == null)
-            {
-                root = node;
-                current = node;
+                folder = new FileTreeItem { Name = name, FullPath = folderPath, IsDirectory = true };
+                siblings.Add(folder);
             }
-            else
-            {
-                current!.Children.Add(node);
-                current = node;
-            }
+            siblings = folder.Children;
         }
 
-        bool isDir = Directory.Exists(fullPath);
-        var leafNode = new FileTreeItem
-        {
-            Name = SanitizeName(parts[^1]),
-            FullPath = fullPath,
-            IsDirectory = isDir,
-            IsPathFolder = false,
-            IsClipboardItem = true
-        };
+        var leafName = SanitizeName(relativeParts.Length > 0 ? relativeParts[^1] : fullPath);
+        if (siblings.Any(s => string.Equals(s.Name, leafName, StringComparison.OrdinalIgnoreCase)))
+            return;
 
-        if (isDir)
-        {
-            try
-            {
-                foreach (var sub in Directory.GetFileSystemEntries(fullPath))
-                    leafNode.Children.Add(CreateFileTreeItem(sub));
-            }
-            catch { }
-        }
-
-        if (current != null)
-            current.Children.Add(leafNode);
-        else
-            root = leafNode;
-
-        return root!;
+        var item = CreateFileTreeItem(fullPath);
+        item.Name = leafName;
+        siblings.Add(item);
     }
 
     /// <summary>
@@ -239,16 +289,15 @@ public class MainViewModel : INotifyPropertyChanged
     /// </summary>
     /// <param name="fullPath">対象のフルパス。 / Full path of the target file or directory.</param>
     /// <returns>生成した <see cref="FileTreeItem"/>。 / The created <see cref="FileTreeItem"/>.</returns>
-    private FileTreeItem CreateFileTreeItem(string fullPath)
+    private static FileTreeItem CreateFileTreeItem(string fullPath)
     {
         bool isDirectory = Directory.Exists(fullPath);
+        var name = Path.GetFileName(fullPath);
         var item = new FileTreeItem
         {
-            Name = Path.GetFileName(fullPath) ?? fullPath,
+            Name = string.IsNullOrEmpty(name) ? fullPath : name,
             FullPath = fullPath,
-            IsDirectory = isDirectory,
-            IsPathFolder = false,
-            IsClipboardItem = true
+            IsDirectory = isDirectory
         };
 
         if (isDirectory)
@@ -265,55 +314,183 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// パスフォルダーノードがクリックされたときに呼び出され、対応するファイルをコピー先へコピーする。
-    /// Called when a path folder node is clicked; copies the corresponding file to the destination.
+    /// ファイル名に使えない文字（ドライブの ":" など）を取り除く。
+    /// Removes characters that cannot be used in file names (such as ":" of a drive).
     /// </summary>
-    /// <param name="folderItem">クリックされたフォルダーアイテム。 / The clicked folder item.</param>
-    private async void OnPathFolderClick(FileTreeItem? folderItem)
+    private static string SanitizeName(string name)
     {
-        if (folderItem == null || string.IsNullOrEmpty(_destinationPath))
+        var invalidChars = Path.GetInvalidFileNameChars();
+        return string.Concat(name.Where(c => !invalidChars.Contains(c)));
+    }
+
+    // ━━━ 貼り付け方の選択 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /// <summary>
+    /// 選ばれている階層。選ばれていなければ null。
+    /// The selected level, or null when none is selected.
+    /// </summary>
+    private PathSegment? SelectedSegment => Segments.FirstOrDefault(s => s.IsSelected);
+
+    /// <summary>
+    /// 階層の選択が変わったとき、ほかの階層と Flatten を外す（ラジオボタンと同じ動き）。
+    /// When a level gets selected, deselects the other levels and Flatten (radio-button behavior).
+    /// </summary>
+    private void OnSegmentPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(PathSegment.IsSelected) || sender is not PathSegment changed)
             return;
 
-        var leaf = FindClipboardLeaf(folderItem);
-        if (leaf == null)
-            return;
-
-        // BuildPathChain は folderItem.FullPath を parts[0..i] の形で構築しているため、
-        // セグメント数（RemoveEmptyEntries）= folderItem が leaf.FullPath 内の何番目のセグメントか を表す。
-        // この深さを使って leaf.FullPath からフォルダ名を先頭に含む相対パスを再構築する。
-        // ※ Path.GetRelativePath / Path.GetFullPath はUNCパスを不完全に保存したノードのFullPathでは
-        //   正しく機能しないため、パス文字列への依存を避けてセグメント配列で処理する。
-        string[] folderParts = folderItem.FullPath.Split(Path.DirectorySeparatorChar,
-            StringSplitOptions.RemoveEmptyEntries);
-        string[] leafParts = leaf.FullPath.Split(Path.DirectorySeparatorChar,
-            StringSplitOptions.RemoveEmptyEntries);
-
-        // folderItem が何番目のセグメントか（0始まり）
-        int startIndex = folderParts.Length - 1;
-
-        string relativePath;
-        if (startIndex >= 0 && startIndex < leafParts.Length)
+        if (changed.IsSelected)
         {
-            // leaf.FullPath の startIndex 以降のセグメントを結合して相対パスを作成する
-            // 先頭セグメントの ":" を除去
-            string[] relParts = leafParts[startIndex..];
-            relParts[0] = relParts[0].Replace(":", "");
-            relativePath = Path.Combine(relParts);
+            foreach (var other in Segments)
+            {
+                if (!ReferenceEquals(other, changed))
+                    other.IsSelected = false;
+            }
+            IsFlatten = false;
+        }
+
+        UpdatePreview();
+    }
+
+    /// <summary>
+    /// 選ぶ階層を左右に動かす。左端より左には行かず、右端の右は「選択なし」。
+    /// Moves the selected level left or right. It stops at the left end; moving right past the right end clears the selection.
+    /// </summary>
+    /// <param name="direction">-1 で左（上の階層）、+1 で右。 / -1 moves left (up a level), +1 moves right.</param>
+    public void MoveSelection(int direction)
+    {
+        if (IsProcessing || Segments.Count == 0) return;
+
+        var current = SelectedSegment;
+        if (direction < 0)
+        {
+            int index = current == null ? Segments.Count - 1 : Math.Max(current.Index - 1, 0);
+            Segments[index].IsSelected = true;
+        }
+        else if (current != null)
+        {
+            if (current.Index == Segments.Count - 1)
+                current.IsSelected = false;
+            else
+                Segments[current.Index + 1].IsSelected = true;
+        }
+    }
+
+    /// <summary>
+    /// Flatten を切り替える。
+    /// Toggles Flatten.
+    /// </summary>
+    public void ToggleFlatten()
+    {
+        if (IsProcessing) return;
+        IsFlatten = !IsFlatten;
+    }
+
+    /// <summary>
+    /// すべての階層の選択を外す。
+    /// Deselects all levels.
+    /// </summary>
+    private void ClearSegmentSelection()
+    {
+        foreach (var segment in Segments)
+            segment.IsSelected = false;
+    }
+
+    /// <summary>
+    /// 選ばれている階層から右のフォルダーを付けた貼り付け先のフォルダーを返す。
+    /// Returns the destination folder with the folders from the selected level to the right appended.
+    /// </summary>
+    private string GetBaseDestination(string destination)
+    {
+        var selected = SelectedSegment;
+        if (selected == null)
+            return destination;
+
+        var folders = Segments.Skip(selected.Index).Select(s => s.FolderName);
+        return Path.Combine([destination, .. folders]);
+    }
+
+    /// <summary>
+    /// 作られる場所の説明を更新する。
+    /// Updates the description of where items will be created.
+    /// </summary>
+    private void UpdatePreview()
+    {
+        if (string.IsNullOrEmpty(_destinationPath) || RootItems.Count == 0)
+        {
+            PreviewText = string.Empty;
+            return;
+        }
+
+        if (!CanPaste)
+        {
+            PreviewText = "No items checked.";
+            return;
+        }
+
+        if (IsFlatten)
+        {
+            var plan = PlanFlatten(_destinationPath);
+            int renamed = plan.Count(p => p.Renamed);
+            string files = plan.Count == 1 ? "1 file" : $"{plan.Count} files";
+            PreviewText = renamed == 0
+                ? $"→ {_destinationPath}  ({files} directly)"
+                : $"→ {_destinationPath}  ({files} directly, {renamed} renamed to avoid overwriting)";
+            return;
+        }
+
+        PreviewText = $"→ {Path.Combine(GetBaseDestination(_destinationPath), "…")}";
+    }
+
+    // ━━━ 貼り付け ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /// <summary>
+    /// 現在の選択に従って、チェックした項目を貼り付け先へコピーする。
+    /// Copies the checked items to the destination according to the current selection.
+    /// </summary>
+    private async void OnPaste()
+    {
+        if (string.IsNullOrEmpty(_destinationPath) || !CanPaste)
+            return;
+
+        string destination = _destinationPath;
+        Action copy;
+        if (IsFlatten)
+        {
+            var plan = PlanFlatten(destination);
+            copy = () =>
+            {
+                Directory.CreateDirectory(destination);
+                foreach (var (source, dest, _) in plan)
+                    CopyWithoutOverwrite(source, dest);
+            };
         }
         else
         {
-            // 範囲外の場合はファイル名のみにフォールバック
-            relativePath = Path.GetFileName(leaf.FullPath) ?? leaf.Name;
-        }
+            // 貼り付けを始めた時点のチェック状態で計画を作る（コピー中にチェックを変えても影響しない）
+            // Build the plan from the check states at the time the paste starts (changing checks during the copy has no effect)
+            string baseDestination = GetBaseDestination(destination);
+            var folders = new List<string>();
+            var files = new List<(string Source, string Destination)>();
+            foreach (var root in RootItems)
+                PlanCheckedItems(root, Path.Combine(baseDestination, root.Name), folders, files);
 
-        string destPath = Path.Combine(_destinationPath, relativePath);
+            copy = () =>
+            {
+                foreach (var folder in folders)
+                    Directory.CreateDirectory(folder);
+                foreach (var (source, dest) in files)
+                    File.Copy(source, dest, overwrite: true);
+            };
+        }
 
         try
         {
             IsProcessing = true;
             Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
 
-            await Task.Run(() => CopyCheckedItems(leaf, destPath));
+            await Task.Run(copy);
 
             MessageBox.Show("Copied successfully.",
                 "Success", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -334,53 +511,166 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// ノードを再帰的に探索し、最初の <see cref="FileTreeItem.IsClipboardItem"/> が true のノードを返す。
-    /// Recursively searches the node tree and returns the first node where <see cref="FileTreeItem.IsClipboardItem"/> is true.
+    /// 平らに貼り付けるときのコピー元とコピー先を決める。
+    /// 貼り付け先にすでにある名前と、今回の貼り付けで使う名前は重ならないようにし、重なったら "name (2).ext" のように名前を変える。
+    /// （上書きすると、貼り付け先にあるコピー元のファイルを先に壊してしまうことがあるため）
+    /// Plans the sources and destinations for a flat paste.
+    /// Names never collide with names already in the destination or used by this paste; collisions are renamed like "name (2).ext".
+    /// (Overwriting could destroy a checked source located in the destination before it is copied.)
     /// </summary>
-    /// <param name="node">探索を開始するノード。 / The node from which to start the search.</param>
-    /// <returns>見つかったリーフノード。見つからない場合は null。 / The found leaf node, or null if not found.</returns>
-    private static FileTreeItem? FindClipboardLeaf(FileTreeItem node)
+    /// <param name="destination">貼り付け先のフォルダー。 / Destination folder.</param>
+    private List<(string Source, string Destination, bool Renamed)> PlanFlatten(string destination)
     {
-        if (node.IsClipboardItem)
-            return node;
-        foreach (var child in node.Children)
+        var plan = new List<(string, string, bool)>();
+        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // 貼り付け先にすでにあるファイルとフォルダーの名前を先に押さえる
+        // Reserve the names of files and folders that already exist in the destination
+        try
         {
-            var found = FindClipboardLeaf(child);
-            if (found != null)
-                return found;
+            foreach (var entry in Directory.EnumerateFileSystemEntries(destination))
+                usedNames.Add(Path.GetFileName(entry));
         }
-        return null;
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 読めなければ、コピーするときの上書きしない処理に任せる
+            // If it cannot be read, rely on the no-overwrite handling at copy time
+        }
+
+        foreach (var file in RootItems.SelectMany(GetCheckedFiles))
+        {
+            string name = file.Name;
+            bool renamed = false;
+            if (!usedNames.Add(name))
+            {
+                int n = 2;
+                do
+                {
+                    name = NumberedName(file.Name, n++);
+                } while (!usedNames.Add(name));
+                renamed = true;
+            }
+            plan.Add((file.FullPath, Path.Combine(destination, name), renamed));
+        }
+
+        return plan;
     }
 
     /// <summary>
-    /// チェックされたアイテムのみを再帰的にコピーする。
-    /// Recursively copies only checked items.
+    /// "name.ext" を "name (n).ext" にする。
+    /// Turns "name.ext" into "name (n).ext".
+    /// </summary>
+    private static string NumberedName(string fileName, int n)
+        => $"{Path.GetFileNameWithoutExtension(fileName)} ({n}){Path.GetExtension(fileName)}";
+
+    private const int ERROR_FILE_EXISTS = 80;
+    private const int ERROR_ALREADY_EXISTS = 183;
+
+    /// <summary>
+    /// 上書きせずにコピーする。いったん同じフォルダーの一時ファイル（この処理だけが使う名前）にコピーしてから、
+    /// 上書きしない名前の変更で置き場所に移す。計画したあとに同じ名前ができていたら、空いている "name (n).ext" に移す。
+    /// 失敗したときに消すのはこの処理が作った一時ファイルだけなので、ほかの処理が作ったファイルを消すことはない。
+    /// Copies without overwriting. It first copies to a temporary file in the same folder (a name only this operation uses),
+    /// then moves it into place with a non-overwriting rename. If the planned name has appeared since planning, it moves to the next free "name (n).ext".
+    /// On failure it deletes only the temporary file it created, so it never deletes a file created by another process.
+    /// </summary>
+    private static void CopyWithoutOverwrite(string source, string destPath)
+    {
+        string folder = Path.GetDirectoryName(destPath)!;
+        string originalName = Path.GetFileName(source);
+        string tempPath = Path.Combine(folder, $".treepaste-{Guid.NewGuid():N}.tmp");
+
+        try
+        {
+            File.Copy(source, tempPath, overwrite: false);
+
+            string target = destPath;
+            int n = 2;
+            while (true)
+            {
+                if (File.Exists(target) || Directory.Exists(target))
+                {
+                    target = Path.Combine(folder, NumberedName(originalName, n++));
+                    continue;
+                }
+
+                try
+                {
+                    File.Move(tempPath, target, overwrite: false);
+                    return;
+                }
+                catch (IOException ex) when ((ex.HResult & 0xFFFF) is ERROR_FILE_EXISTS or ERROR_ALREADY_EXISTS)
+                {
+                    // 確認したあとに同じ名前ができた
+                    // The name appeared after the check
+                    target = Path.Combine(folder, NumberedName(originalName, n++));
+                }
+            }
+        }
+        catch
+        {
+            try { File.Delete(tempPath); } catch { }
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// チェックされたファイル（フォルダーは除く）を深さに関係なく列挙する。
+    /// Enumerates checked files (excluding folders) at any depth.
+    /// </summary>
+    private static IEnumerable<FileTreeItem> GetCheckedFiles(FileTreeItem item)
+    {
+        if (!item.IsDirectory)
+        {
+            if (item.IsChecked == true)
+                yield return item;
+            yield break;
+        }
+
+        foreach (var child in item.Children)
+        {
+            foreach (var file in GetCheckedFiles(child))
+                yield return file;
+        }
+    }
+
+    /// <summary>
+    /// チェックされたアイテムについて、作るフォルダーとコピーするファイルを再帰的に集める。
+    /// フォルダーは親から順に並ぶので、先頭から作ればファイルの置き場所がそろう。
+    /// Recursively collects the folders to create and the files to copy for checked items.
+    /// Folders are listed parent first, so creating them in order prepares every file's location.
     /// </summary>
     /// <param name="item">コピー元の <see cref="FileTreeItem"/>。 / Source <see cref="FileTreeItem"/>.</param>
     /// <param name="destPath">コピー先のパス。 / Destination path.</param>
-    private static void CopyCheckedItems(FileTreeItem item, string destPath)
+    /// <param name="folders">作るフォルダー。 / Folders to create.</param>
+    /// <param name="files">コピーするファイル。 / Files to copy.</param>
+    private static void PlanCheckedItems(FileTreeItem item, string destPath,
+        List<string> folders, List<(string Source, string Destination)> files)
     {
-        if (!HasAnyCheckedClipboardItem(item)) return;
+        if (!HasAnyCheckedItem(item)) return;
 
         if (!item.IsDirectory)
         {
             string? parentDir = Path.GetDirectoryName(destPath);
             if (!string.IsNullOrEmpty(parentDir))
-                Directory.CreateDirectory(parentDir);
-            File.Copy(item.FullPath, destPath, overwrite: true);
+                folders.Add(parentDir);
+            files.Add((item.FullPath, destPath));
             return;
         }
 
-        Directory.CreateDirectory(destPath);
+        folders.Add(destPath);
         foreach (var child in item.Children)
-            CopyCheckedItems(child, Path.Combine(destPath, child.Name));
+            PlanCheckedItems(child, Path.Combine(destPath, child.Name), folders, files);
     }
+
+    // ━━━ チェック状態の監視 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /// <summary>
     /// ツリーアイテムとその子孫の IsChecked 変更を購読する。
     /// Subscribes to IsChecked changes for a tree item and all its descendants.
     /// </summary>
     /// <param name="item">購読対象のアイテム。 / Item to subscribe.</param>
+    /// <param name="parent">親アイテム。 / Parent item.</param>
     private void SubscribeToCheckedChanges(FileTreeItem item, FileTreeItem? parent = null)
     {
         item.Parent = parent;
@@ -402,33 +692,70 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// アイテムのプロパティ変更を処理し、IsChecked が変わった場合に CanPaste を更新する。
-    /// Handles item property changes and updates CanPaste when IsChecked changes.
+    /// アイテムの IsChecked が変わったら、CanPaste と説明の更新を予約する。
+    /// Schedules a CanPaste and preview refresh when an item's IsChecked changes.
     /// </summary>
-    private void OnItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    private void OnItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(FileTreeItem.IsChecked))
-            UpdateCanPaste();
+        if (e.PropertyName != nameof(FileTreeItem.IsChecked)) return;
+        QueueCheckStateRefresh();
     }
 
     /// <summary>
-    /// CanPaste を再計算する。チェックされたクリップボードアイテムが1つ以上あれば true。
-    /// Recalculates CanPaste. True if at least one checked clipboard item exists.
+    /// CanPaste と説明の更新を1回だけ予約する。フォルダーのチェックで子孫のチェックが一度に変わっても、
+    /// 伝播が終わってから1回だけ計算し直す。入力より優先度が高いので、次のクリックやキー操作の前に終わる。
+    /// Schedules a single CanPaste and preview refresh. Even when checking a folder changes all its descendants at once,
+    /// they are recalculated only once after the propagation finishes. It runs at a higher priority than input,
+    /// so it completes before the next click or key press.
+    /// </summary>
+    private void QueueCheckStateRefresh()
+    {
+        if (_checkStateRefreshQueued) return;
+        _checkStateRefreshQueued = true;
+        System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            _checkStateRefreshQueued = false;
+            UpdateCanPaste();
+            UpdatePreview();
+        }, DispatcherPriority.DataBind);
+    }
+
+    /// <summary>
+    /// CanPaste を再計算する。チェックされたアイテムが1つ以上あれば true。
+    /// Recalculates CanPaste. True if at least one checked item exists.
     /// </summary>
     private void UpdateCanPaste()
     {
-        CanPaste = RootItems.Any(HasAnyCheckedClipboardItem);
+        CanPaste = RootItems.Any(HasAnyCheckedItem);
     }
 
     /// <summary>
-    /// ノードまたはその子孫にチェックされたクリップボードアイテムがあるかどうかを返す。
-    /// Returns whether the node or any descendant has a checked clipboard item.
+    /// ノードまたはその子孫にチェックされたアイテムがあるかどうかを返す。
+    /// Returns whether the node or any descendant is checked.
     /// </summary>
     /// <param name="item">探索するノード。 / Node to search.</param>
-    private static bool HasAnyCheckedClipboardItem(FileTreeItem item)
+    private static bool HasAnyCheckedItem(FileTreeItem item)
     {
-        if (item.IsClipboardItem && item.IsChecked == true) return true;
-        return item.Children.Any(HasAnyCheckedClipboardItem);
+        if (item.Children.Count == 0) return item.IsChecked == true;
+        return item.Children.Any(HasAnyCheckedItem);
+    }
+
+    // ━━━ 表示の終了 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /// <summary>
+    /// ツリー・パンくず・選択をすべて消す。
+    /// Clears the tree, the breadcrumb and the selection.
+    /// </summary>
+    private void Clear()
+    {
+        UnsubscribeFromCheckedChanges();
+        RootItems.Clear();
+        foreach (var segment in Segments)
+            segment.PropertyChanged -= OnSegmentPropertyChanged;
+        Segments.Clear();
+        _isFlatten = false;
+        OnPropertyChanged(nameof(IsFlatten));
+        CanPaste = false;
     }
 
     /// <summary>
@@ -437,9 +764,8 @@ public class MainViewModel : INotifyPropertyChanged
     /// </summary>
     public void OnHide()
     {
-        UnsubscribeFromCheckedChanges();
-        RootItems.Clear();
-        CanPaste = false;
+        Clear();
+        PreviewText = string.Empty;
     }
 
     /// <summary>
