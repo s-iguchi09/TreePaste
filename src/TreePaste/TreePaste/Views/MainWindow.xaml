@@ -5,10 +5,13 @@
     xmlns:converters="clr-namespace:TreePaste.Converters"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:p="clr-namespace:TreePaste.Properties"
     xmlns:vm="clr-namespace:TreePaste.ViewModels"
     Title="TreePaste"
-    Width="520"
-    Height="480"
+    Width="580"
+    Height="640"
+    FontFamily="Segoe UI Variable Text, Yu Gothic UI"
+    FontSize="14"
     PreviewKeyDown="Window_PreviewKeyDown"
     ShowInTaskbar="False"
     Topmost="True"
@@ -24,9 +27,9 @@
             <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="Padding" Value="8,4" />
             <Setter Property="Margin" Value="0,2" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="14" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Focusable" Value="False" />
@@ -56,6 +59,12 @@
             </Setter>
         </Style>
 
+        <!--  見出しラベルと補足文（グレーの小さめの文字）  -->
+        <Style x:Key="CaptionTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}" />
+        </Style>
+
         <!--  Flatten は区別しやすいよう枠線を付ける  -->
         <Style
             x:Key="FlattenToggleStyle"
@@ -81,9 +90,8 @@
             <!--  コピー先パス  -->
             <StackPanel Grid.Row="0" Margin="0,0,0,12">
                 <TextBlock
-                    FontSize="11"
-                    Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
-                    Text="Copy to:" />
+                    Style="{StaticResource CaptionTextStyle}"
+                    Text="{x:Static p:Strings.CopyToLabel}" />
                 <Border
                     Margin="0,4,0,0"
                     Padding="10,6"
@@ -94,7 +102,6 @@
                         <SolidColorBrush Opacity="0.06" Color="{DynamicResource {x:Static SystemColors.AccentColorKey}}" />
                     </Border.Background>
                     <TextBlock
-                        FontSize="13"
                         Text="{Binding DestinationPathText}"
                         TextTrimming="CharacterEllipsis"
                         TextWrapping="NoWrap"
@@ -105,9 +112,8 @@
             <!--  貼り付け方（パンくずで起点の階層を選ぶ / Flatten）  -->
             <StackPanel Grid.Row="1" Margin="0,0,0,12">
                 <TextBlock
-                    FontSize="11"
-                    Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
-                    Text="Paste from:  (Alt+← / Alt+→ to choose a level, Alt+F to flatten)" />
+                    Style="{StaticResource CaptionTextStyle}"
+                    Text="{x:Static p:Strings.PasteFromLabel}" />
                 <Grid Margin="0,4,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -132,7 +138,7 @@
                                         Content="{Binding Name}"
                                         IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                         Style="{StaticResource SegmentToggleStyle}"
-                                        ToolTip="Create folders from this level" />
+                                        ToolTip="{x:Static p:Strings.SegmentToolTip}" />
                                 </StackPanel>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
@@ -141,15 +147,14 @@
                         Grid.Column="1"
                         Margin="8,0,0,0"
                         VerticalAlignment="Top"
-                        Content="Flatten"
+                        Content="{x:Static p:Strings.FlattenButton}"
                         IsChecked="{Binding IsFlatten, Mode=TwoWay}"
                         Style="{StaticResource FlattenToggleStyle}"
-                        ToolTip="Paste checked files directly into the destination, ignoring folders (Alt+F)" />
+                        ToolTip="{x:Static p:Strings.FlattenToolTip}" />
                 </Grid>
                 <TextBlock
                     Margin="0,4,0,0"
-                    FontSize="11"
-                    Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
+                    Style="{StaticResource CaptionTextStyle}"
                     Text="{Binding PreviewText}"
                     TextWrapping="Wrap" />
             </StackPanel>
@@ -158,9 +163,8 @@
             <TextBlock
                 Grid.Row="2"
                 Margin="0,0,0,6"
-                FontSize="11"
-                Foreground="{DynamicResource {x:Static SystemColors.GrayTextBrushKey}}"
-                Text="Files in clipboard:" />
+                Style="{StaticResource CaptionTextStyle}"
+                Text="{x:Static p:Strings.FilesInClipboardLabel}" />
 
             <!--  ファイルツリー（コピーした項目が最上位）  -->
             <Border
@@ -213,18 +217,18 @@
                     HorizontalAlignment="Right"
                     Orientation="Horizontal">
                     <Button
-                        Width="100"
+                        MinWidth="110"
                         Height="32"
                         Margin="0,0,8,0"
                         Command="{Binding PasteCommand}"
-                        Content="Paste"
+                        Content="{x:Static p:Strings.PasteButton}"
                         IsDefault="True"
                         Style="{DynamicResource AccentButtonStyle}" />
                     <Button
-                        Width="100"
+                        MinWidth="110"
                         Height="32"
                         Command="{Binding CancelCommand}"
-                        Content="Cancel"
+                        Content="{x:Static p:Strings.CancelButton}"
                         IsCancel="True" />
                 </StackPanel>
             </Grid>

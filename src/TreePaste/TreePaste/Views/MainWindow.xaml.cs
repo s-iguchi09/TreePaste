@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using TreePaste.Infrastructure;
+using TreePaste.Properties;
 using TreePaste.ViewModels;
 using Key = System.Windows.Input.Key;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
@@ -111,7 +112,7 @@ public partial class MainWindow : Window
     {
         var showItem = new System.Windows.Controls.MenuItem
         {
-            Header = "Show (Ctrl+Alt+V)"
+            Header = Strings.TrayShow
         };
         showItem.Click += (_, _) => ShowAndLoadClipboard();
 
@@ -130,7 +131,7 @@ public partial class MainWindow : Window
 
         var exitItem = new System.Windows.Controls.MenuItem
         {
-            Header = "Exit"
+            Header = Strings.TrayExit
         };
         exitItem.Click += (_, _) =>
         {
@@ -160,8 +161,8 @@ public partial class MainWindow : Window
         if (!Win32Api.RegisterHotKey(helper.Handle, HOTKEY_ID,
             Win32Api.MOD_CONTROL | Win32Api.MOD_ALT, Win32Api.VK_V))
         {
-            MessageBox.Show("Failed to register hotkey (Ctrl+Alt+V).",
-                "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(Strings.HotkeyFailed,
+                Strings.ErrorTitle, MessageBoxButton.OK, MessageBoxImage.Error);
             _notifyIcon?.Dispose();
             System.Windows.Application.Current.Shutdown();
         }

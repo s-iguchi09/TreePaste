@@ -1,5 +1,6 @@
 using System.Collections.Specialized;
 using System.IO;
+using TreePaste.Properties;
 using Clipboard = System.Windows.Clipboard;
 
 namespace TreePaste.Services;
@@ -124,7 +125,7 @@ internal static class ClipboardHelper
         if (File.Exists(sourcePath))
         {
             if (Path.GetFullPath(sourcePath) == Path.GetFullPath(destinationPath))
-                throw new InvalidOperationException($"Source and destination are the same file:\n{sourcePath}");
+                throw new InvalidOperationException(string.Format(Strings.SameFileError, sourcePath));
 
             string? parentDir = Path.GetDirectoryName(destinationPath);
             if (!string.IsNullOrEmpty(parentDir))

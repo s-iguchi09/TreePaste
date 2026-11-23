@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using TreePaste.Models;
+using TreePaste.Properties;
 using TreePaste.Services;
 using MessageBox = System.Windows.MessageBox;
 
@@ -17,7 +18,7 @@ namespace TreePaste.ViewModels;
 /// </summary>
 public class MainViewModel : INotifyPropertyChanged
 {
-    private string _destinationPathText = "Loading...";
+    private string _destinationPathText = Strings.Loading;
     private string? _destinationPath;
     private bool _isProcessing;
     private bool _canPaste;
@@ -141,7 +142,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         if (string.IsNullOrEmpty(_destinationPath))
         {
-            DestinationPathText = "Desktop(Explorer not found)";
+            DestinationPathText = Strings.DesktopFallback;
             _destinationPath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
         }
         else
@@ -167,8 +168,8 @@ public class MainViewModel : INotifyPropertyChanged
         if (clipboardPaths.Count == 0)
         {
             UpdatePreview();
-            MessageBox.Show("No files in clipboard.",
-                "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(Strings.NoFilesInClipboard,
+                Strings.InfoTitle, MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
@@ -425,7 +426,7 @@ public class MainViewModel : INotifyPropertyChanged
 
         if (!CanPaste)
         {
-            PreviewText = "No items checked.";
+            PreviewText = Strings.NoItemsChecked;
             return;
         }
 
@@ -433,10 +434,11 @@ public class MainViewModel : INotifyPropertyChanged
         {
             var plan = PlanFlatten(_destinationPath);
             int renamed = plan.Count(p => p.Renamed);
-            string files = plan.Count == 1 ? "1 file" : $"{plan.Count} files";
-            PreviewText = renamed == 0
-                ? $"→ {_destinationPath}  ({files} directly)"
-                : $"→ {_destinationPath}  ({files} directly, {renamed} renamed to avoid overwriting)";
+            string files = plan.Count == 1 ? Strings.FileCountOne : string.Format(Strings.FileCountMany, plan.Count);
+            string detail = renamed == 0
+                ? string.Format(Strings.FlattenPreview, files)
+                : string.Format(Strings.FlattenPreviewRenamed, files, renamed);
+            PreviewText = $"→ {_destinationPath}  ({detail})";
             return;
         }
 
@@ -492,16 +494,16 @@ public class MainViewModel : INotifyPropertyChanged
 
             await Task.Run(copy);
 
-            MessageBox.Show("Copied successfully.",
-                "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show(Strings.CopySucceeded,
+                Strings.SuccessTitle, MessageBoxButton.OK, MessageBoxImage.Information);
 
             OnHide();
             CloseRequested?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Error while copying:\n{ex.Message}",
-                "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(string.Format(Strings.CopyFailed, ex.Message),
+                Strings.ErrorTitle, MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
