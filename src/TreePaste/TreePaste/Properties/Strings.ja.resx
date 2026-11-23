@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="CopyToLabel" xml:space="preserve">
+    <value>貼り付け先：</value>
+  </data>
+  <data name="PasteFromLabel" xml:space="preserve">
+    <value>起点の階層：（Alt+← / Alt+→ で選択、Alt+F でフラット化）</value>
+  </data>
+  <data name="SegmentToolTip" xml:space="preserve">
+    <value>この階層からフォルダーを作成</value>
+  </data>
+  <data name="FlattenButton" xml:space="preserve">
+    <value>フラット化</value>
+  </data>
+  <data name="FlattenToolTip" xml:space="preserve">
+    <value>フォルダー構成を無視し、チェックしたファイルを貼り付け先へ直接置く (Alt+F)</value>
+  </data>
+  <data name="FilesInClipboardLabel" xml:space="preserve">
+    <value>クリップボードの項目：</value>
+  </data>
+  <data name="PasteButton" xml:space="preserve">
+    <value>貼り付け</value>
+  </data>
+  <data name="CancelButton" xml:space="preserve">
+    <value>キャンセル</value>
+  </data>
+  <data name="Loading" xml:space="preserve">
+    <value>読み込み中…</value>
+  </data>
+  <data name="DesktopFallback" xml:space="preserve">
+    <value>デスクトップ（エクスプローラーが見つかりません）</value>
+  </data>
+  <data name="NoFilesInClipboard" xml:space="preserve">
+    <value>クリップボードにファイルがありません。</value>
+  </data>
+  <data name="NoItemsChecked" xml:space="preserve">
+    <value>チェックされた項目がありません。</value>
+  </data>
+  <data name="FileCountOne" xml:space="preserve">
+    <value>1 個のファイル</value>
+  </data>
+  <data name="FileCountMany" xml:space="preserve">
+    <value>{0} 個のファイル</value>
+  </data>
+  <data name="FlattenPreview" xml:space="preserve">
+    <value>{0}を直接配置</value>
+  </data>
+  <data name="FlattenPreviewRenamed" xml:space="preserve">
+    <value>{0}を直接配置、{1} 個は上書きを避けるため名前を変更</value>
+  </data>
+  <data name="CopySucceeded" xml:space="preserve">
+    <value>コピーしました。</value>
+  </data>
+  <data name="CopyFailed" xml:space="preserve">
+    <value>コピー中にエラーが発生しました：&#10;{0}</value>
+  </data>
+  <data name="SameFileError" xml:space="preserve">
+    <value>コピー元とコピー先が同じファイルです：&#10;{0}</value>
+  </data>
+  <data name="HotkeyFailed" xml:space="preserve">
+    <value>ホットキー (Ctrl+Alt+V) を登録できませんでした。</value>
+  </data>
+  <data name="TrayShow" xml:space="preserve">
+    <value>表示 (Ctrl+Alt+V)</value>
+  </data>
+  <data name="TrayExit" xml:space="preserve">
+    <value>終了</value>
+  </data>
+  <data name="InfoTitle" xml:space="preserve">
+    <value>情報</value>
+  </data>
+  <data name="SuccessTitle" xml:space="preserve">
+    <value>完了</value>
+  </data>
+  <data name="ErrorTitle" xml:space="preserve">
+    <value>エラー</value>
+  </data>
+</root>

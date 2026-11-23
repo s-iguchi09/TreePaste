@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="CopyToLabel" xml:space="preserve">
+    <value>Copy to:</value>
+  </data>
+  <data name="PasteFromLabel" xml:space="preserve">
+    <value>Paste from:  (Alt+← / Alt+→ to choose a level, Alt+F to flatten)</value>
+  </data>
+  <data name="SegmentToolTip" xml:space="preserve">
+    <value>Create folders from this level</value>
+  </data>
+  <data name="FlattenButton" xml:space="preserve">
+    <value>Flatten</value>
+  </data>
+  <data name="FlattenToolTip" xml:space="preserve">
+    <value>Paste checked files directly into the destination, ignoring folders (Alt+F)</value>
+  </data>
+  <data name="FilesInClipboardLabel" xml:space="preserve">
+    <value>Files in clipboard:</value>
+  </data>
+  <data name="PasteButton" xml:space="preserve">
+    <value>Paste</value>
+  </data>
+  <data name="CancelButton" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Loading" xml:space="preserve">
+    <value>Loading...</value>
+  </data>
+  <data name="DesktopFallback" xml:space="preserve">
+    <value>Desktop (Explorer not found)</value>
+  </data>
+  <data name="NoFilesInClipboard" xml:space="preserve">
+    <value>No files in clipboard.</value>
+  </data>
+  <data name="NoItemsChecked" xml:space="preserve">
+    <value>No items checked.</value>
+  </data>
+  <data name="FileCountOne" xml:space="preserve">
+    <value>1 file</value>
+  </data>
+  <data name="FileCountMany" xml:space="preserve">
+    <value>{0} files</value>
+  </data>
+  <data name="FlattenPreview" xml:space="preserve">
+    <value>{0} directly</value>
+  </data>
+  <data name="FlattenPreviewRenamed" xml:space="preserve">
+    <value>{0} directly, {1} renamed to avoid overwriting</value>
+  </data>
+  <data name="CopySucceeded" xml:space="preserve">
+    <value>Copied successfully.</value>
+  </data>
+  <data name="CopyFailed" xml:space="preserve">
+    <value>Error while copying:&#10;{0}</value>
+  </data>
+  <data name="SameFileError" xml:space="preserve">
+    <value>Source and destination are the same file:&#10;{0}</value>
+  </data>
+  <data name="HotkeyFailed" xml:space="preserve">
+    <value>Failed to register hotkey (Ctrl+Alt+V).</value>
+  </data>
+  <data name="TrayShow" xml:space="preserve">
+    <value>Show (Ctrl+Alt+V)</value>
+  </data>
+  <data name="TrayExit" xml:space="preserve">
+    <value>Exit</value>
+  </data>
+  <data name="InfoTitle" xml:space="preserve">
+    <value>Info</value>
+  </data>
+  <data name="SuccessTitle" xml:space="preserve">
+    <value>Success</value>
+  </data>
+  <data name="ErrorTitle" xml:space="preserve">
+    <value>Error</value>
+  </data>
+</root>

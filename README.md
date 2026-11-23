@@ -23,6 +23,7 @@ You can choose the folder level from a breadcrumb of the source path and paste f
 - Keyboard: **Alt+← / Alt+→** to choose a level, **Alt+F** to toggle Flatten, **Enter** to paste, **Esc** to cancel
 - Automatically detects the path of the active Explorer window and sets it as the paste destination
 - Falls back to the Desktop if no Explorer window is found
+- The UI is shown in Japanese or English, following the Windows display language
 
 ### How to Use
 
@@ -76,11 +77,12 @@ This uses the same publish profile as the release workflow and produces a self-c
 - **Ctrl+Alt+V** でいつでもウィンドウを呼び出せる
 - クリップボードにコピーされたファイル・フォルダーをツリー表示し、チェックボックスでペーストする項目を選択可能
 - コピー元のパスをパンくずで表示し、階層を選ぶとその階層からフォルダーを作ってペースト（もう一度押すと選択が外れ、そのままペースト）
-- **Flatten** でチェックしたファイルを階層を無視してペースト先の直下にペースト（上書きはせず、重なる名前やペースト先にすでにある名前には「 (2)」などを付けて保存）
+- **フラット化** でチェックしたファイルを階層を無視してペースト先の直下にペースト（上書きはせず、重なる名前やペースト先にすでにある名前には「 (2)」などを付けて保存）
 - ペーストする前に、作られる場所を表示
-- キー操作：**Alt+← / Alt+→** で階層を選択、**Alt+F** で Flatten の切り替え、**Enter** でペースト、**Esc** でキャンセル
+- キー操作：**Alt+← / Alt+→** で階層を選択、**Alt+F** でフラット化の切り替え、**Enter** でペースト、**Esc** でキャンセル
 - アクティブなエクスプローラーウィンドウのパスを自動検出し、ペースト先として設定
 - エクスプローラーが見つからない場合はデスクトップをペースト先に設定
+- 画面の表示言語は Windows の表示言語に合わせて日本語・英語を自動で切り替え
 
 ### 使い方
 
@@ -88,8 +90,8 @@ This uses the same publish profile as the release workflow and produces a self-c
 2. ペーストしたいファイルをエクスプローラーでコピー（Ctrl+C）
 3. エクスプローラーでペースト先フォルダーを開く
 4. **Ctrl+Alt+V** でウィンドウを呼び出す
-5. ペーストする項目にチェックを付け、必要ならパンくずで起点の階層を選ぶか Flatten をオンにする
-6. **Paste** を押す（または Enter）
+5. ペーストする項目にチェックを付け、必要ならパンくずで起点の階層を選ぶかフラット化をオンにする
+6. **貼り付け** を押す（または Enter）
 
 ### 動作環境
 
